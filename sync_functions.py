@@ -22,10 +22,10 @@ def sync(source, target, delete, dry_run, verbose):
     target_files = create_file_dict(target)
     logger.debug(f"Time for create_file_dict 2 {round(time() - time_point, 2)}")
     time_point = time()
-    lr_list, rl_list, del_src, del_tar = create_sync_lists(source_files, target_files, delete)
+    lr_list, rl_list, del_src, del_tar = create_sync_lists(source, target, source_files, target_files, delete)
     logger.debug(f"Time for create_sync_lists {round(time() - time_point, 2)}")
     time_point = time()
-    # logger.debug(f"lr list: {lr_list}\nrl list: {rl_list}\ndel src list: {del_src}\ndel tar list: {del_tar}")
+    #logger.debug(f"lr list: {lr_list}\nrl list: {rl_list}\ndel src list: {del_src}\ndel tar list: {del_tar}")
 
     # Returns if all relevant lists are empty!
     if not lr_list and not rl_list:
@@ -47,7 +47,6 @@ def sync(source, target, delete, dry_run, verbose):
     # TODO. Here happens the actual syncing.
     return_lr = rsync(source, target, delete, dry_run, verbose, False, True, lr_filepath)
     return_rl = rsync(source, target, delete, dry_run, verbose, False, True, rl_filepath)
-        
 
 #    TODO DO THE DELETIONS
     logging.debug(f"Total time elapsed: {round(time() - start_time, 2)}")
@@ -56,6 +55,42 @@ def sync(source, target, delete, dry_run, verbose):
 
 
 def create_file_dict(top_directory):
+    """Uses os.walk to go through top_directory including subdirectory to
+    create file_dict. 
+    - file_dict uses root directory (path relative
+    to top_directory) as key and has inner_dict as value. 
+
+    Args:
+        top_directory {string}: path to top directory. Can be relative or absolute.
+
+    Returns:
+        file_dict {dictionary}: see above
+    """
+
+    top_directory = os.path.abspath(top_directory)
+    working_dir = os.getcwd()
+    os.chdir(top_directory)
+    file_dict = {}
+    first_dir = True
+
+    for basedir, _, files in os.walk(top_directory):
+        if not first_dir:
+            basedir = os.path.relpath(basedir,top_directory)
+        else:
+            basedir = ""
+            first_dir = False
+
+        file_dict[basedir] = set()
+        files_in_basedir = file_dict[basedir]
+        for a_file in files:
+            rel_file_path = os.path.join(basedir, a_file)
+            files_in_basedir.add(rel_file_path)
+
+    os.chdir(working_dir)
+    return file_dict
+
+
+def create_file_dict_old(top_directory):
     """Uses os.walk to go through top_directory including subdirectory to
     create file_dict. 
     - file_dict uses root directory (path relative
@@ -98,7 +133,73 @@ def file_existed(a_file):
     return False
 
 
-def create_sync_lists(src_files, tar_files, delete):
+def create_sync_lists(source, target, src_files, tar_files, delete):
+    def add_or_delete_file(a_file, add_list, del_list):
+        if file_existed(a_file):
+            del_list.append(a_file)
+        else:
+            add_list.append(a_file)
+    def add_or_delete_folder(root_path, dict_of_files_in_root, add_list, del_list):
+        # Checks if folder existed in previous sync
+        if file_existed(root_path):
+            choosen_list = del_list
+        else:
+            choosen_list = add_list
+
+        for item in dict_of_files_in_root:
+            choosen_list.append(item)
+            
+        if not dict_of_files_in_root:
+            # If no files in root add root folder itself
+            choosen_list.append(root_path)
+
+    left_to_right, right_to_left, delete_list_src, delete_list_tar = [], [], [], []
+    # Loop through all keys in src_files. Root corresponds to existing dirs
+    for root in src_files:
+        basedir_src = src_files[root]
+        if root in tar_files:
+            # Current root (dir) exist both in source and target!
+            basedir_tar = tar_files[root]
+            # Loop through all files in dir
+            for item in basedir_src:
+                if item in basedir_tar:
+                    # File in both source and target! Compare files.
+                    srcfile_path = os.path.join(source, item)
+                    tarfile_path = os.path.join(target, item)
+                    mod_time_srcfile = (os.lstat(srcfile_path)).st_mtime
+                    mod_time_tarfile = (os.lstat(tarfile_path)).st_mtime
+                    date_diff = mod_time_srcfile - mod_time_tarfile 
+
+                    # TODO floating point arithmetics might cause errors. Rethink.
+                    if date_diff > 0:
+                        left_to_right.append(item)
+                    elif date_diff < 0:
+                        right_to_left.append(item)
+
+                    # Delete key from target dict
+                    basedir_tar.remove(item)
+                else: 
+                    # File only in source not in target
+                    add_or_delete_file(item, left_to_right, delete_list_src)
+                    
+            # Checks if there are files exclusive to target (not in source)
+            for item in basedir_tar:
+                add_or_delete_file(item, right_to_left, delete_list_tar)
+            # delete key corresponding to root from tar_files
+            del tar_files[root]
+
+        else:
+            # root exists in source but not in target
+            add_or_delete_folder(root, basedir_src, left_to_right, delete_list_src)
+
+    # Only remaining roots in tar_files exists only in target (not in source).
+    for root in tar_files:
+        add_or_delete_folder(root, tar_files[root], right_to_left, delete_list_tar)
+
+    return left_to_right, right_to_left, delete_list_src, delete_list_tar
+    
+
+def create_sync_lists_old(src_files, tar_files, delete):
     def add_or_delete_file(a_file, add_list, del_list):
         if file_existed(a_file):
             del_list.append(a_file)
@@ -157,7 +258,7 @@ def create_sync_lists(src_files, tar_files, delete):
         add_or_delete_folder(root, tar_files[root], right_to_left, delete_list_tar)
 
     return left_to_right, right_to_left, delete_list_src, delete_list_tar
-    
+
 
 def format_rsync_output(st_ouput):
     # This formating function will only work reliable if not using -v or -P for rsync call.
