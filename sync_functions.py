@@ -38,26 +38,20 @@ def sync(source, target, delete, dry_run, verbose):
     script_dir = os.path.dirname(os.path.realpath(__file__))
     lr_filepath = os.path.join(script_dir, "lr_sync.tmp")
     rl_filepath = os.path.join(script_dir, "rl_sync.tmp")
-    file_lr = open(lr_filepath, 'w')
-    file_rl = open(rl_filepath, 'w')
-    file_lr.writelines([line + '\n' for line in lr_list])
-    file_rl.writelines([line + '\n' for line in rl_list])
+    
+    with open(lr_filepath, 'w') as file_lr:
+        file_lr.writelines([line + '\n' for line in lr_list])
+    with open(rl_filepath, 'w') as file_rl:
+        file_rl.writelines([line + '\n' for line in rl_list])
+        
+    # TODO Test the syncing
+    return_lr = rsync(source, target, delete, dry_run, verbose, False, True, lr_filepath)
+    return_rl = rsync(source, target, delete, dry_run, verbose, False, True, rl_filepath)
+        
 
-    rsync_arglist = ["rsync"]
-    rsync_options = "-a"
-    if dry_run:
-        rsync_options += "n"
-    if verbose:
-        rsync_options += "v"
-    rsync_arglist.append(rsync_options)
-
-#    TODO DO THE ACTUAL SYNCING AND DELETIONS FROM LISTS
-#    completed_process = subprocess.run(["rsync", "-vrn", source, target], text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-#    print(completed_process.stdout)
+#    TODO DO THE DELETIONS
     logging.debug(f"Total time elapsed: {round(time() - start_time, 2)}")
 
-    file_lr.close()
-    file_rl.close()
     # TODO Delete the files after syncing
 
 
@@ -235,7 +229,7 @@ def format_rsync_output(st_ouput):
     return (os.linesep).join(return_list)
 
 
-def rsync(source, target, delete=False, dryrun=False, print_output=True, user_interaction=True):
+def rsync(source, target, delete=False, dryrun=False, print_output=True, user_interaction=True, from_file=False, file_path=None):
     """Summary: Sync using rsync as subprocess. This function greatly simplifies
     rsync because of default flag behavior, see below. Use original rsync 
     if greater flexibility is needed.
@@ -249,6 +243,13 @@ def rsync(source, target, delete=False, dryrun=False, print_output=True, user_in
         dryrun {bool}: If true run rsync ones with --dry-run flag. If true ignores user_interaction=True.
         prin_output {bool}: If true prints output.
         user_interaction: If true and dryrun=False --> runs 1 inital dryrun and gives user choose to continue or not.
+    
+    Returns:
+        Most often propagates returncode from rsync call itself.
+        Have the following function specified returncodes (not from rsync)
+        aborted_by_user = 49
+        already_synced = 50
+        from_file_without_valid_filepath = 51
     """
     
     def run_rsync(rsync_arglist):
@@ -276,8 +277,21 @@ def rsync(source, target, delete=False, dryrun=False, print_output=True, user_in
         return obj_return.returncode
         
     rsync_arglist = ["rsync", "-a", "--itemize-changes"]
+
+    if from_file:
+        from_file_without_valid_filepath = 51
+        if file_path:
+            if os.path.isfile(file_path):
+                files_from_arg = "--files-from=" + file_path
+                rsync_arglist.append(files_from_arg)
+            else:
+                return from_file_without_valid_filepath
+        else:
+            return from_file_without_valid_filepath
+        
     if delete:
         rsync_arglist.append("--delete")
+
     rsync_arglist.append(source)
     rsync_arglist.append(target)
 
@@ -296,8 +310,7 @@ def rsync(source, target, delete=False, dryrun=False, print_output=True, user_in
         if user_input == "n" or user_input == "no":
             print("Exiting program...")
             aborted_by_user = 49
-            return aborted_by_user
-        
+            return aborted_by_user        
     elif dryrun:
         rsync_arglist.append("--dry-run")
 

@@ -27,10 +27,12 @@ sql_createtablefiles = """
     id INTEGER PRIMARY KEY,
     folder_pair_id INTEGER NOT NULL,
     file TEXT NOT NULL,
-    time_modified INTEGER NOT NULL,
     FOREIGN KEY (folder_pair_id)
         REFERENCES folder_pairs (id)
     );"""
+    
+    # Previously had this in the table above. Currently do not use that field.
+    # time_modified INTEGER NOT NULL,
     
 sql_createindexfiles = """
     CREATE UNIQUE INDEX file_index ON files (folder_pair_id, file)
