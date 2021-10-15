@@ -25,7 +25,7 @@ def sync(source, target, delete, dry_run, verbose):
     lr_list, rl_list, del_src, del_tar = create_sync_lists(source_files, target_files, delete)
     logger.debug(f"Time for create_sync_lists {round(time() - time_point, 2)}")
     time_point = time()
-    logger.debug(f"lr list: {lr_list}\nrl list: {rl_list}\ndel src list: {del_src}\ndel tar list: {del_tar}")
+    # logger.debug(f"lr list: {lr_list}\nrl list: {rl_list}\ndel src list: {del_src}\ndel tar list: {del_tar}")
 
     # Returns if all relevant lists are empty!
     if not lr_list and not rl_list:
@@ -44,7 +44,7 @@ def sync(source, target, delete, dry_run, verbose):
     with open(rl_filepath, 'w') as file_rl:
         file_rl.writelines([line + '\n' for line in rl_list])
         
-    # TODO Test the syncing
+    # TODO. Here happens the actual syncing.
     return_lr = rsync(source, target, delete, dry_run, verbose, False, True, lr_filepath)
     return_rl = rsync(source, target, delete, dry_run, verbose, False, True, rl_filepath)
         

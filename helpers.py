@@ -2,6 +2,11 @@
 from time import strftime, localtime
 
 class File:
+    # Since there are so many instances of the File class when syncing large
+    # folders. __slots__ makes properties go inside fixed sized list instead of __dict__
+    # resulting in non trivial memory and speed gains.
+    __slots__=["modified", "size"]
+
     def __init__(self, modified, size) -> None:
         self.modified = modified
         self.size = size
