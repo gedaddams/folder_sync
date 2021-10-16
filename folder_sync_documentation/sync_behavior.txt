@@ -4,8 +4,12 @@
 
 1) If file exist on both sides overwrite the one with older modification with the newer one.
 
-2) If file only on 1 side. Checks db, several possible outcomes listed below.
-	a) If file previously existed on both sides it is deleted if deletions are active
-	b) If file only existed on 1 side the previous sync checks for desired action in db.
-		If field says to delete (field value 0). Deletes file if delete is activated.
-		If field says to add (field value 1), add file to other side if has read permission.
+2) If file only on 1 side. Checks db.
+	- If file in db delete it.
+	- If file not in db add it.
+	
+3) After sync files will be added to db if:
+	- They exist on both side
+	- If they exist on one side AND they would have beed deleted if delete was active.
+	- If they exist on one side as a result of a failed copy (ie no read permission)
+	they will not be added to db so that program doesn't try to delete it next time.

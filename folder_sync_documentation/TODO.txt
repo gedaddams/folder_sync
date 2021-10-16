@@ -1,0 +1,4 @@
+﻿folder_sync TODO
+
+    - Add folders table to db. The table should be identical to files table except it is supposed to hold path to
+    dirs instead of files.
