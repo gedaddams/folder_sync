@@ -27,7 +27,8 @@ def main():
             source = db_helpers.adjust_dirname(source)
             target = db_helpers.adjust_dirname(target)
 
-            if db_helpers.folder_pair_exists(cur, source, target):
+            if True:
+            #if db_helpers.folder_pair_exists(cur, source, target):
                 sync_functions.sync(source, target, delete, dry_run, verbose)                    
             else:
                 setup_new_folder_pair(cur, source, target)

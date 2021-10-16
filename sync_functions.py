@@ -45,8 +45,8 @@ def sync(source, target, delete, dry_run, verbose):
         file_rl.writelines([line + '\n' for line in rl_list])
         
     # TODO. Here happens the actual syncing.
-    return_lr = rsync(source, target, delete, dry_run, verbose, False, True, lr_filepath)
-    return_rl = rsync(source, target, delete, dry_run, verbose, False, True, rl_filepath)
+    #return_lr = rsync(source, target, delete, dry_run, verbose, False, True, lr_filepath)
+    #return_rl = rsync(source, target, delete, dry_run, verbose, False, True, rl_filepath)
 
 #    TODO DO THE DELETIONS
     logging.debug(f"Total time elapsed: {round(time() - start_time, 2)}")
@@ -90,68 +90,30 @@ def create_file_dict(top_directory):
     return file_dict
 
 
-def create_file_dict_old(top_directory):
-    """Uses os.walk to go through top_directory including subdirectory to
-    create file_dict. 
-    - file_dict uses root directory (path relative
-    to top_directory) as key and has inner_dict as value. 
-
-    Args:
-        top_directory {string}: path to top directory. Can be relative or absolute.
-
-    Returns:
-        file_dict {dictionary}: see above
-    """
-
-    top_directory = os.path.abspath(top_directory)
-    working_dir = os.getcwd()
-    os.chdir(top_directory)
-    file_dict = {}
-    first_dir = True
-
-    for root, _, files in os.walk(top_directory):
-        if not first_dir:
-            root = os.path.relpath(root,top_directory)
-        else:
-            root = ""
-            first_dir = False
-
-        file_dict[root] = {}
-        inner_dict = file_dict[root]
-        for a_file in files:
-            rel_file_path = os.path.join(root, a_file)
-            file_obj = os.lstat(rel_file_path)
-            inner_dict[rel_file_path] = File(file_obj.st_mtime, file_obj.st_size)
-
-    os.chdir(working_dir)
-    return file_dict
-
-
-def file_existed(a_file):
-    # TODO check wether file existed in previous sync --> return true/false
+def item_existed(a_file):
+    # TODO check wether file/folder existed in previous sync --> return true/false
     # Will need to check vs sqlite database
     return False
 
 
-def create_sync_lists(source, target, src_files, tar_files, delete):
-    def add_or_delete_file(a_file, add_list, del_list):
-        if file_existed(a_file):
+def create_sync_lists(source, target, src_files, tar_files):
+    def add_or_delete_item(a_file, add_list, del_list):
+        if item_existed(a_file):
             del_list.append(a_file)
         else:
             add_list.append(a_file)
+
     def add_or_delete_folder(root_path, dict_of_files_in_root, add_list, del_list):
         # Checks if folder existed in previous sync
-        if file_existed(root_path):
+        if item_existed(root_path):
             choosen_list = del_list
         else:
             choosen_list = add_list
 
+        # First append files then basedir itself.
         for item in dict_of_files_in_root:
             choosen_list.append(item)
-            
-        if not dict_of_files_in_root:
-            # If no files in root add root folder itself
-            choosen_list.append(root_path)
+        choosen_list.append(root_path)
 
     left_to_right, right_to_left, delete_list_src, delete_list_tar = [], [], [], []
     # Loop through all keys in src_files. Root corresponds to existing dirs
@@ -180,11 +142,11 @@ def create_sync_lists(source, target, src_files, tar_files, delete):
                     basedir_tar.remove(item)
                 else: 
                     # File only in source not in target
-                    add_or_delete_file(item, left_to_right, delete_list_src)
+                    add_or_delete_item(item, left_to_right, delete_list_src)
                     
             # Checks if there are files exclusive to target (not in source)
             for item in basedir_tar:
-                add_or_delete_file(item, right_to_left, delete_list_tar)
+                add_or_delete_item(item, right_to_left, delete_list_tar)
             # delete key corresponding to root from tar_files
             del tar_files[root]
 
@@ -198,67 +160,6 @@ def create_sync_lists(source, target, src_files, tar_files, delete):
 
     return left_to_right, right_to_left, delete_list_src, delete_list_tar
     
-
-def create_sync_lists_old(src_files, tar_files, delete):
-    def add_or_delete_file(a_file, add_list, del_list):
-        if file_existed(a_file):
-            del_list.append(a_file)
-        else:
-            add_list.append(a_file)
-    def add_or_delete_folder(root_path, dict_of_files_in_root, add_list, del_list):
-        # Checks if folder existed in previous sync
-        if file_existed(root_path):
-            choosen_list = del_list
-        else:
-            choosen_list = add_list
-
-        for item in dict_of_files_in_root:
-            choosen_list.append(item)
-            
-        if not dict_of_files_in_root:
-            # If no files in root add root folder itself
-            choosen_list.append(root_path)
-
-    left_to_right, right_to_left, delete_list_src, delete_list_tar = [], [], [], []
-    # Loop through all keys in src_files. Root corresponds to existing dirs
-    for root in src_files:
-        basedir_src = src_files[root]
-        if root in tar_files:
-            # Current root (dir) exist both in source and target!
-            basedir_tar = tar_files[root]
-            # Loop through all files in dir
-            for item in basedir_src:
-                
-                if item in basedir_tar:
-                    # File in both source and target! Compare files.
-                    file_compare = basedir_src[item].compare_files(basedir_tar[item])
-                    if file_compare == "newer":
-                        left_to_right.append(item)
-                    elif file_compare == "older":
-                        right_to_left.append(item)
-
-                    # Delete key from target dict
-                    del basedir_tar[item]
-                else: 
-                    # File only in source not in target
-                    add_or_delete_file(item, left_to_right, delete_list_src)
-                    
-            # Checks if there are files exclusive to target (not in source)
-            for item in basedir_tar:
-                add_or_delete_file(item, right_to_left, delete_list_tar)
-            # delete key corresponding to root from tar_files
-            del tar_files[root]
-
-        else:
-            # root exists in source but not in target
-            add_or_delete_folder(root, basedir_src, left_to_right, delete_list_src)
-
-    # Only remaining roots in tar_files exists only in target (not in source).
-    for root in tar_files:
-        add_or_delete_folder(root, tar_files[root], right_to_left, delete_list_tar)
-
-    return left_to_right, right_to_left, delete_list_src, delete_list_tar
-
 
 def format_rsync_output(st_ouput):
     # This formating function will only work reliable if not using -v or -P for rsync call.
