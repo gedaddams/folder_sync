@@ -22,7 +22,7 @@ def sync(source, target, delete, dry_run, verbose):
     target_files = create_file_dict(target)
     logger.debug(f"Time for create_file_dict 2 {round(time() - time_point, 2)}")
     time_point = time()
-    lr_list, rl_list, del_src, del_tar = create_sync_lists(source, target, source_files, target_files, delete)
+    lr_list, rl_list, del_src, del_tar = create_sync_lists(source, target, source_files, target_files)
     logger.debug(f"Time for create_sync_lists {round(time() - time_point, 2)}")
     time_point = time()
     #logger.debug(f"lr list: {lr_list}\nrl list: {rl_list}\ndel src list: {del_src}\ndel tar list: {del_tar}")
@@ -110,10 +110,13 @@ def create_sync_lists(source, target, src_files, tar_files):
         else:
             choosen_list = add_list
 
-        # First append files then basedir itself.
-        for item in dict_of_files_in_root:
-            choosen_list.append(item)
-        choosen_list.append(root_path)
+        # If no files in dir append dir itself.
+        if not dict_of_files_in_root:
+            choosen_list.append(root_path)
+        else:
+            # If there are files in dir append the files.
+            for item in dict_of_files_in_root:
+                choosen_list.append(item)
 
     left_to_right, right_to_left, delete_list_src, delete_list_tar = [], [], [], []
     # Loop through all keys in src_files. Root corresponds to existing dirs
