@@ -12,4 +12,4 @@
 	- They exist on both side
 	- If they exist on one side AND they would have beed deleted if delete was active.
 	- If they exist on one side as a result of a failed copy (ie no read permission)
-	they will not be added to db so that program doesn't try to delete it next time.
+	they will NOT be added to db so that program doesn't try to delete it next time.
