@@ -1,3 +1,5 @@
 ﻿folder_sync TODO
 
-    1. Add file_actions table to db. Also add file_action_id field to files table as foreign key.
+    1. Add desired_actions table to db. Also add desired_action_id field to files table as foreign key.
+    2. Add folders table to db. The table should be identical to files table except it is supposed to hold path to
+    dirs instead of files.
