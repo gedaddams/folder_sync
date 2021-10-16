@@ -1,0 +1,3 @@
+﻿folder_sync TODO
+
+    1. Add file_actions table to db. Also add file_action_id field to files table as foreign key.

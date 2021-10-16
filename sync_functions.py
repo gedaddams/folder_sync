@@ -11,6 +11,13 @@ logger = logging.getLogger(__name__)
     
 def sync(source, target, delete, dry_run, verbose):
     # TODO Add some kind of ignore list. ex .tmp files should be ignored.
+    def remove_set_intersection(set1: set, set2: set) -> set:
+        intersection_set = set1.intersection(set2)
+        if intersection_set:
+            for item in intersection_set:
+                lr_set.remove(item)
+                rl_set.remove(item)
+        return intersection_set
 
     start_time = time()
     source, target = os.path.abspath(source), os.path.abspath(target)
@@ -41,12 +48,9 @@ def sync(source, target, delete, dry_run, verbose):
     # TODO check that same path doesnt exist both in lr_set and rl_set.
     # Could happen if file with same name as dir on other side.
     time_point = time()
-    intersection_set = lr_set.intersection(rl_set)
+    intersection_set = remove_set_intersection(lr_set, rl_set)
     if intersection_set:
-        logger.info(f"Intersection {intersection_set}")
-        for item in intersection_set:
-            lr_set.remove(item)
-            rl_set.remove(item)
+        logger.debug(f"Intersection of sync sets {intersection_set}")
     logger.debug(f"Time for intersection testing: {round(time() - time_point), 2}")
     
     # Sync!

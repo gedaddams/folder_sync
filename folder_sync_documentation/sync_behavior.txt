@@ -1,0 +1,11 @@
+﻿folder_sync behavior
+
+- If file/folder on ignore list all actions below should be ignored.
+
+1) If file exist on both sides overwrite the one with older modification with the newer one.
+
+2) If file only on 1 side. Checks db, several possible outcomes listed below.
+	a) If file previously existed on both sides it is deleted if deletions are active
+	b) If file only existed on 1 side the previous sync checks for desired action in db.
+		If field says to delete (field value 0). Deletes file if delete is activated.
+		If field says to add (field value 1), add file to other side if has read permission.
