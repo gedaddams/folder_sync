@@ -97,6 +97,9 @@ def item_existed(a_file):
 
 
 def create_sync_lists(source, target, src_files, tar_files):
+    # TODO Figure out how to handle if there exist dir on one side with same
+    # path as file on other side. Maybe always append dir even if have files
+    # and do some kind of set union?
     def add_or_delete_item(a_file, add_list, del_list):
         if item_existed(a_file):
             del_list.append(a_file)
