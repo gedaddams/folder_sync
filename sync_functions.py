@@ -22,13 +22,13 @@ def sync(source, target, delete, dry_run, verbose):
     target_files = create_file_dict(target)
     logger.debug(f"Time for create_file_dict 2 {round(time() - time_point, 2)}")
     time_point = time()
-    lr_list, rl_list, del_src, del_tar = create_sync_sets(source, target, source_files, target_files)
+    lr_set, rl_set, del_src, del_tar = create_sync_sets(source, target, source_files, target_files)
     logger.debug(f"Time for create_sync_sets {round(time() - time_point, 2)}")
     time_point = time()
-    logger.debug(f"lr list: {lr_list}\nrl list: {rl_list}\ndel src list: {del_src}\ndel tar list: {del_tar}")
+    logger.debug(f"lr list: {lr_set}\nrl list: {rl_set}\ndel src list: {del_src}\ndel tar list: {del_tar}")
 
     # Returns if all relevant lists are empty!
-    if not lr_list and not rl_list:
+    if not lr_set and not rl_set:
         if delete:
             if not del_src and not del_tar:
                 return
@@ -37,15 +37,15 @@ def sync(source, target, delete, dry_run, verbose):
     
     script_dir = os.path.dirname(os.path.realpath(__file__))
 
-    if lr_list:
+    if lr_set:
         lr_filepath = os.path.join(script_dir, "lr_sync.tmp")
         with open(lr_filepath, 'w') as file_lr:
-            file_lr.writelines([line + '\n' for line in lr_list])
+            file_lr.writelines([line + '\n' for line in lr_set])
 
-    if rl_list:
+    if rl_set:
         rl_filepath = os.path.join(script_dir, "rl_sync.tmp")
         with open(rl_filepath, 'w') as file_rl:
-            file_rl.writelines([line + '\n' for line in rl_list])
+            file_rl.writelines([line + '\n' for line in rl_set])
         
     # TODO. Here happens the actual syncing.
     #return_lr = rsync(source, target, delete, dry_run, verbose, False, True, lr_filepath)
