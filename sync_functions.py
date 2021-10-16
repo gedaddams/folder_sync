@@ -24,37 +24,49 @@ def sync(source, target, delete, dry_run, verbose):
     time_point = time()
     lr_set, rl_set, del_src, del_tar = create_sync_sets(source, target, source_files, target_files)
     logger.debug(f"Time for create_sync_sets {round(time() - time_point, 2)}")
-    time_point = time()
-    logger.debug(f"lr list: {lr_set}\nrl list: {rl_set}\ndel src list: {del_src}\ndel tar list: {del_tar}")
+    #logger.debug(f"lr list: {lr_set}\nrl list: {rl_set}\ndel src list: {del_src}\ndel tar list: {del_tar}")
 
     # Returns if all relevant lists are empty!
     if not lr_set and not rl_set:
         if delete:
             if not del_src and not del_tar:
+                print("Folders are already in sync!")
                 return
         else:
+            print("Folders are already in sync (at least with deletions deactivated)!")
             return
+
+    # TODO DO THE DELETIONS. Goes first if file is created with same name as previous dir.
     
+    # TODO check that same path doesnt exist both in lr_set and rl_set.
+    # Could happen if file with same name as dir on other side.
+    time_point = time()
+    intersection_set = lr_set.intersection(rl_set)
+    if intersection_set:
+        logger.info(f"Intersection {intersection_set}")
+        for item in intersection_set:
+            lr_set.remove(item)
+            rl_set.remove(item)
+    logger.debug(f"Time for intersection testing: {round(time() - time_point), 2}")
+    
+    # Sync!
     script_dir = os.path.dirname(os.path.realpath(__file__))
 
     if lr_set:
         lr_filepath = os.path.join(script_dir, "lr_sync.tmp")
         with open(lr_filepath, 'w') as file_lr:
             file_lr.writelines([line + '\n' for line in lr_set])
+        # TODO Activate syncing when ready!
+        #return_lr = rsync(source, target, delete, dry_run, verbose, False, True, lr_filepath)
 
     if rl_set:
         rl_filepath = os.path.join(script_dir, "rl_sync.tmp")
         with open(rl_filepath, 'w') as file_rl:
             file_rl.writelines([line + '\n' for line in rl_set])
-        
-    # TODO. Here happens the actual syncing.
-    #return_lr = rsync(source, target, delete, dry_run, verbose, False, True, lr_filepath)
-    #return_rl = rsync(source, target, delete, dry_run, verbose, False, True, rl_filepath)
+        # TODO Activate syncing when ready!
+        #return_rl = rsync(source, target, delete, dry_run, verbose, False, True, rl_filepath)
 
-#    TODO DO THE DELETIONS
     logging.debug(f"Total time elapsed: {round(time() - start_time, 2)}")
-
-    # TODO Delete the files after syncing
 
 
 def create_file_dict(top_directory):

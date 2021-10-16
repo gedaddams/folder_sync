@@ -28,6 +28,7 @@ def main():
             target = db_helpers.adjust_dirname(target)
 
             if True:
+            # TODO activate following line and remove if True when ready.
             #if db_helpers.folder_pair_exists(cur, source, target):
                 sync_functions.sync(source, target, delete, dry_run, verbose)                    
             else:
