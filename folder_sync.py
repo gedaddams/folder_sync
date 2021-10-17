@@ -101,7 +101,7 @@ def get_arguments():
     parser.add_argument("-s", "--source", dest="source_dir", help="source directory", required=True)
     parser.add_argument("-t", "--target", dest="target_dir", help="target directory", required=True)
     parser.add_argument("-d", "--delete", dest="delete", default="False", help="set to true to enable deletions", required=False)
-    parser.add_argument("-n", "--dry-run", dest="dry_run", default="False", help="set to false to do dryrun", required=False)
+    parser.add_argument("-n", "--dry-run", dest="dry_run", default="False", help="set to true to do dryrun", required=False)
     parser.add_argument("-v", "--verbose", dest="verbose", default="True", help="set to false to sync without output", required=False)
     options = parser.parse_args()
     source_dir = options.source_dir
