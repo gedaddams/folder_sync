@@ -1,5 +1,5 @@
 from time import time
-from helpers import Deleted_items
+from helpers import Delete_items, Sync_class
 import os
 import subprocess
 import logging
@@ -11,30 +11,21 @@ logger = logging.getLogger(__name__)
     
 def sync(source, target, delete, dry_run, verbose):
     # TODO Add some kind of ignore list. ex .tmp files should be ignored.
-    def remove_set_intersection(set1: set, set2: set) -> set:
-        intersection_set = set1.intersection(set2)
-        if intersection_set:
-            for item in intersection_set:
-                lr_set.remove(item)
-                rl_set.remove(item)
-        return intersection_set
 
     start_time = time()
-    source, target = os.path.abspath(source), os.path.abspath(target)
-    time_point = time()
-    logger.debug(f"Time for setup {round(time_point-start_time, 2)}")
     source_files = create_file_dict(source)
-    logger.debug(f"Time for create_file_dict 1 {round(time() - time_point, 2)}")
+    logger.debug(f"Time for create_file_dict 1 {round(time() - start_time, 2)}")
     time_point = time()
     target_files = create_file_dict(target)
     logger.debug(f"Time for create_file_dict 2 {round(time() - time_point, 2)}")
     time_point = time()
-    lr_set, rl_set, del_src, del_tar = create_sync_sets(source, target, source_files, target_files)
+    sync_obj, del_src, del_tar = \
+        create_sync_objects(source, target, source_files, target_files)
     logger.debug(f"Time for create_sync_sets {round(time() - time_point, 2)}")
     #logger.debug(f"lr list: {lr_set}\nrl list: {rl_set}\ndel src list: {del_src}\ndel tar list: {del_tar}")
 
     # Returns if all relevant lists are empty!
-    if not lr_set and not rl_set:
+    if sync_obj.is_empty():
         if delete:
             if del_src.is_empty() and del_tar.is_empty():
                 print("Folders are already in sync!")
@@ -53,27 +44,10 @@ def sync(source, target, delete, dry_run, verbose):
     # TODO check that same path doesnt exist both in lr_set and rl_set.
     # Could happen if file with same name as dir on other side.
     time_point = time()
-    intersection_set = remove_set_intersection(lr_set, rl_set)
-    if intersection_set:
-        logger.debug(f"Intersection of sync sets {intersection_set}")
-    logger.debug(f"Time for intersection testing: {round(time() - time_point), 2}")
+    sync_obj.remove_intersection(verbose)
+    logger.debug(f"Time for intersection testing: {round(time() - time_point, 2)}")
     
-    # Sync!
-    script_dir = os.path.dirname(os.path.realpath(__file__))
-
-    if lr_set:
-        lr_filepath = os.path.join(script_dir, "lr_sync.tmp")
-        with open(lr_filepath, 'w') as file_lr:
-            file_lr.writelines([line + '\n' for line in lr_set])
-        # TODO Activate syncing when ready!
-        #return_lr = rsync(source, target, delete, dry_run, verbose, False, True, lr_filepath)
-
-    if rl_set:
-        rl_filepath = os.path.join(script_dir, "rl_sync.tmp")
-        with open(rl_filepath, 'w') as file_rl:
-            file_rl.writelines([line + '\n' for line in rl_set])
-        # TODO Activate syncing when ready!
-        #return_rl = rsync(source, target, delete, dry_run, verbose, False, True, rl_filepath)
+    return_src_to_tar, return_tar_to_src = sync_obj.sync(delete, dry_run, verbose)
 
     logging.debug(f"Total time elapsed: {round(time() - start_time, 2)}")
 
@@ -131,6 +105,82 @@ def dir_existed(a_dir):
     return False
 
 
+def create_sync_objects(source, target, src_files, tar_files):
+    # TODO Figure out how to handle if there exist dir on one side with same
+    # path as file on other side. Maybe always append dir even if have files
+    # and do some kind of set union?
+    def add_or_delete_item(a_file, add_set, del_obj):
+        if file_existed(a_file):
+            del_obj.files.add(a_file)
+        else:
+            add_set.add(a_file)
+
+    def add_or_delete_folder(root_path, dict_of_files_in_root, add_set, 
+        del_obj):
+        # Note that function handles adding and deletions differently since
+        # there is a need to seperate files and dirs for deletions but not for adding.
+        # Checks if folder existed in previous sync
+        if dir_existed(root_path):
+            del_obj.dirs.add(root_path)
+            choosen_set = del_obj.files_in_deleted_dirs
+        else:
+            add_set.add(root_path)
+            choosen_set = add_set
+
+        for item in dict_of_files_in_root:
+            choosen_set.add(item)
+
+    del_src, del_tar = Delete_items(source), Delete_items(target) 
+    sync_obj = Sync_class(source, target)
+    left_to_right, right_to_left = sync_obj.lr_items, sync_obj.rl_items 
+
+    # Loop through all keys in src_files. Root corresponds to existing dirs
+    for root in src_files:
+        basedir_src = src_files[root]
+        if root in tar_files:
+            # Current root (dir) exist both in source and target!
+            basedir_tar = tar_files[root]
+            # Loop through all files in dir
+            for item in basedir_src:
+                if item in basedir_tar:
+                    # File in both source and target! Compare files.
+                    srcfile_path = os.path.join(source, item)
+                    tarfile_path = os.path.join(target, item)
+                    mod_time_srcfile = (os.lstat(srcfile_path)).st_mtime
+                    mod_time_tarfile = (os.lstat(tarfile_path)).st_mtime
+                    date_diff = mod_time_srcfile - mod_time_tarfile 
+
+                    # TODO floating point arithmetics might cause errors. Rethink.
+                    if date_diff > 0:
+                        left_to_right.add(item)
+                    elif date_diff < 0:
+                        right_to_left.add(item)
+
+                    # Delete key from target dict
+                    basedir_tar.remove(item)
+                else: 
+                    # File only in source not in target
+                    add_or_delete_item(item, left_to_right, del_src)
+                    
+            # Checks if there are files exclusive to target (not in source)
+            for item in basedir_tar:
+                add_or_delete_item(item, right_to_left, del_tar)
+            # delete key corresponding to root from tar_files
+            del tar_files[root]
+
+        else:
+            # root exists in source but not in target
+            add_or_delete_folder(root, basedir_src, left_to_right, 
+            del_src)
+
+    # Only remaining roots in tar_files exists only in target (not in source).
+    for root in tar_files:
+        add_or_delete_folder(root, tar_files[root], right_to_left, 
+        del_tar)
+
+    return sync_obj, del_src, del_tar
+
+
 def create_sync_sets(source, target, src_files, tar_files):
     # TODO Figure out how to handle if there exist dir on one side with same
     # path as file on other side. Maybe always append dir even if have files
@@ -157,7 +207,7 @@ def create_sync_sets(source, target, src_files, tar_files):
             choosen_set.add(item)
 
     left_to_right, right_to_left = set(), set()
-    del_src, del_tar = Deleted_items(source), Deleted_items(target) 
+    del_src, del_tar = Delete_items(source), Delete_items(target) 
 
     # Loop through all keys in src_files. Root corresponds to existing dirs
     for root in src_files:
