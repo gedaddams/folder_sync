@@ -30,7 +30,7 @@ def main():
             if True:
             # TODO activate following line and remove if True when ready.
             #if db_helpers.folder_pair_exists(cur, source, target):
-                sync_functions.sync(source, target, delete, dry_run, verbose)                    
+                sync_functions.two_way_sync(source, target, delete, dry_run, verbose)                    
             else:
                 setup_new_folder_pair(cur, source, target)
         else:
@@ -41,7 +41,6 @@ def main():
 
 
 def setup_new_folder_pair(cur, source, target):
-    # TODO function needs testing
 
     user_input = ""
     while not user_input in {"y", "yes", "n", "no"}:
@@ -54,6 +53,8 @@ def setup_new_folder_pair(cur, source, target):
         sys.exit(3)
     
     print("\nPerforming rsync dryrun!\n")
+    # Since user_interaction in below call is true. Rsync will be called twice
+    # with first run being dryrun. User gets chance to bail out.
     return_value = sync_functions.rsync(source, target, True, False, True, True)
     if not return_value == 0: # 0 = correct execution.
         if return_value == 49: # 49 = User aborted interactively!

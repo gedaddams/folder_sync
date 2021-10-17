@@ -1,10 +1,80 @@
-"""This module contains classes and helper functions"""
+"""This module contains classes and function format_rsync_output"""
 import os
 import subprocess
 from shutil import rmtree
 from time import strftime, localtime
 
-class Sync_class:
+def format_rsync_output(st_ouput):
+    # This formating function will only work reliable if not using -v or -P for rsync call.
+    # You also have to use --itemize-changes flag.
+    output_list = st_ouput.split(os.linesep)
+    if output_list[-1] == "":
+        output_list.pop()
+
+    msg_list, created, modified = [], [], []
+    file_types = {
+        "f": "file: ", 
+        "d": "directory: ", 
+        "L": "symlink: ",
+        "D": "DEVICE: ",
+        "S": "SPECIAL FILE: "}
+    
+    for line in output_list:
+        words = line.split()
+
+        len_words = len(words)
+        if len_words == 2:
+            prefix, file = words[0], words[1]
+        elif len_words > 2:
+            # Below join is needed for filenames with whitespace in them
+            prefix, file = words[0], " ".join(words[1:])
+        else:
+            # This shouldnt happen!
+            msg_list.append(line)
+            continue
+
+        change = prefix[0]
+        if change == "*": # Message (often deletion)
+            msg_list.append(line)
+            continue
+        elif change == "<" or change == ">":
+            if prefix[2:] == "+++++++++":
+                new_prefix = "Created "
+                choosen_list = created
+            else:
+                new_prefix = "Updated "
+                choosen_list = modified
+        elif change == "c":
+            new_prefix = "Created "
+            choosen_list = created
+        elif change == ".":
+            # File not updated. Skip.
+            continue
+        else:
+            # Cannot cleanup.
+            msg_list.append(line)
+            continue
+        
+        filetype = ""
+        type_of_file = prefix[1]
+        if type_of_file in file_types:
+            filetype = file_types[type_of_file]
+
+        lacking_whitespace = 30 - (len(new_prefix) + len(filetype))
+        if lacking_whitespace > 0:
+            spaces = ' ' * lacking_whitespace
+        else:
+            spaces = ""
+        choosen_list.append((new_prefix + filetype + spaces + file))
+
+    msg_list.sort()
+    created.sort()
+    modified.sort()
+    return_list = msg_list + [""] + created + [""] + modified
+    return (os.linesep).join(return_list)
+
+
+class Syncer:
     
     def __init__(self, src_root, tar_root) -> None:
         # lr = left-to-right rl = right-to-left
@@ -50,82 +120,23 @@ class Sync_class:
                 self.duplicates.add(item)
         if verbose and intersection_set:    
             print(f"Intersection of sync sets {intersection_set}")
-    
-    def __format_rsync_output(self, st_ouput):
-        # This formating function will only work reliable if not using -v or -P for rsync call.
-        # You also have to use --itemize-changes flag.
-        output_list = st_ouput.split(os.linesep)
-        if output_list[-1] == "":
-            output_list.pop()
-
-        msg_list, created, modified = [], [], []
-        file_types = {
-            "f": "file: ", 
-            "d": "directory: ", 
-            "L": "symlink: ",
-            "D": "DEVICE: ",
-            "S": "SPECIAL FILE: "}
-        
-        for line in output_list:
-            words = line.split()
-
-            len_words = len(words)
-            if len_words == 2:
-                prefix, file = words[0], words[1]
-            elif len_words > 2:
-                # Below join is needed for filenames with whitespace in them
-                prefix, file = words[0], " ".join(words[1:])
-            else:
-                # This shouldnt happen!
-                msg_list.append(line)
-                continue
-
-            change = prefix[0]
-            if change == "*": # Message (often deletion)
-                msg_list.append(line)
-                continue
-            elif change == "<" or change == ">":
-                if prefix[2:] == "+++++++++":
-                    new_prefix = "Created "
-                    choosen_list = created
-                else:
-                    new_prefix = "Updated "
-                    choosen_list = modified
-            elif change == "c":
-                new_prefix = "Created "
-                choosen_list = created
-            elif change == ".":
-                # File not updated. Skip.
-                continue
-            else:
-                # Cannot cleanup.
-                msg_list.append(line)
-                continue
-            
-            filetype = ""
-            type_of_file = prefix[1]
-            if type_of_file in file_types:
-                filetype = file_types[type_of_file]
-
-            lacking_whitespace = 30 - (len(new_prefix) + len(filetype))
-            if lacking_whitespace > 0:
-                spaces = ' ' * lacking_whitespace
-            else:
-                spaces = ""
-            choosen_list.append((new_prefix + filetype + spaces + file))
-
-        msg_list.sort()
-        created.sort()
-        modified.sort()
-        return_list = msg_list + [""] + created + [""] + modified
-        return (os.linesep).join(return_list)
 
     def __run_rsync(self, rsync_arglist, print_output):
+        """Used by sync method to call rsync with rsync_arglist. Will always use
+        --from-file and --itemize-changes.
+
+        Args:
+            rsync_arglist {list}: list of args for rsync call
+            print_output {boolean}: Wether to print any output or not
+
+        Returns:
+            [type]: [description]
+        """
         obj_return = subprocess.run(rsync_arglist, text=True, capture_output=True)
 
         if obj_return.stdout:
             if print_output:
-                print(self.__format_rsync_output(obj_return.stdout))
+                print(format_rsync_output(obj_return.stdout))
         else:
             if not obj_return.stderr:
                 if print_output:
@@ -206,7 +217,7 @@ class Sync_class:
         return return_lr, return_rl
     
 
-class Delete_items:
+class Deleter:
     
     def __init__(self, root_dir) -> None:
         self.files = set()
@@ -230,27 +241,3 @@ class Delete_items:
             path = os.path.join(self.root_dir, item)
             print(f"Deleting directory: {path}")
             rmtree(path)
-
-
-class File:
-    # Since there are so many instances of the File class when syncing large
-    # folders. __slots__ makes properties go inside fixed sized list instead of __dict__
-    # resulting in non trivial memory and speed gains.
-    __slots__=["modified", "size"]
-
-    def __init__(self, modified, size) -> None:
-        self.modified = modified
-        self.size = size
-        
-    def compare_files(self, file):
-        if not isinstance(file, File):
-            return NotImplemented
-        if self.modified == file.modified:
-            return "equal"
-        elif self.modified > file.modified:
-            return "newer"
-        else:
-            return "older"
-    
-    def __repr__(self) -> str:
-        return f"(Last modified: {strftime('%Y-%m-%d %H:%M:%S', localtime(self.modified))}, Size: {self.size})"
