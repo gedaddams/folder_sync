@@ -12,6 +12,7 @@
             "console": "integratedTerminal",
             "args": ["-s", "~/Documents/testdir", "-t", "~/Documents/testdir_copy"]
             //"args": ["-s", "~", "-t", "~"]
+            //"args": ["-s", "~/Documents/testdir", "-t", "~/Documents/testdir_copy", "-d", "true"]
         }
     ]
 }

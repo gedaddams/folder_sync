@@ -1,16 +1,33 @@
 """This module contains classes and helper functions"""
+import os
+from shutil import rmtree
 from time import strftime, localtime
 
 class Deleted_items:
-    __slots__ = ["files", "dirs", "files_in_deleted_dirs"]
+    __slots__ = ["files", "dirs", "files_in_deleted_dirs", "root_dir"]
     
-    def __init__(self) -> None:
+    def __init__(self, root_dir) -> None:
         self.files = set()
         self.dirs = set()
         self.files_in_deleted_dirs = set()
+        self.root_dir = root_dir
         
     def get_all_items(self):
         return self.files.union(self.dirs, self.files_in_deleted_dirs)
+
+    def is_empty(self):
+        return not self.files and not self.dirs and not self.files_in_deleted_dirs
+    
+    def delete_items(self):
+        for item in self.files:
+            path = os.path.join(self.root_dir, item)
+            print(f"Deleting file: {path}")
+            os.unlink(path)
+        
+        for item in self.dirs:
+            path = os.path.join(self.root_dir, item)
+            print(f"Deleting directory: {path}")
+            rmtree(path)
 
 
 class File:

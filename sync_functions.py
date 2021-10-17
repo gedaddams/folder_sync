@@ -34,29 +34,20 @@ def sync(source, target, delete, dry_run, verbose):
     #logger.debug(f"lr list: {lr_set}\nrl list: {rl_set}\ndel src list: {del_src}\ndel tar list: {del_tar}")
 
     # Returns if all relevant lists are empty!
-    # TODO correct this
     if not lr_set and not rl_set:
         if delete:
-            if not del_src and not del_tar:
+            if del_src.is_empty() and del_tar.is_empty():
                 print("Folders are already in sync!")
                 return
         else:
             print("Folders are already in sync (at least with deletions deactivated)!")
             return
 
-    # TODO DO THE DELETIONS. Goes first if file is created with same name as previous dir.
-    # TODO correct this. No deletions occur here yet.
+    # DOES THE DELETIONS
     time_point = time()
-    files, dirs = 0, 0
-    for item in lr_set:
-        abs_path = os.path.join(source, item)
-        if os.path.isfile(abs_path):
-            files += 1
-        elif os.path.isdir(abs_path):
-            dirs += 1
-    print(f"files = {files}")
-    print(f"dirs = {dirs}")
-    
+    if delete:
+        del_src.delete_items()
+        del_tar.delete_items()
     logger.debug(f"Time for deleting {round(time() - time_point)}")
     
     # TODO check that same path doesnt exist both in lr_set and rl_set.
@@ -106,7 +97,7 @@ def create_file_dict(top_directory):
     file_dict = {}
     first_dir = True
 
-    for basedir, _, files in os.walk(top_directory):
+    for basedir, folders, files in os.walk(top_directory):
         if not first_dir:
             basedir = os.path.relpath(basedir,top_directory)
         else:
@@ -118,6 +109,11 @@ def create_file_dict(top_directory):
         for a_file in files:
             rel_file_path = os.path.join(basedir, a_file)
             files_in_basedir.add(rel_file_path)
+        
+        for a_dir in folders:
+            rel_file_path = os.path.join(basedir, a_dir)
+            if os.path.islink(rel_file_path):
+                files_in_basedir.add(rel_file_path)
 
     os.chdir(working_dir)
     return file_dict
@@ -132,7 +128,7 @@ def file_existed(a_file):
 def dir_existed(a_dir):
     # TODO check wether dir existed in previous sync --> return true/false
     # Will need to check vs sqlite database
-    return True
+    return False
 
 
 def create_sync_sets(source, target, src_files, tar_files):
@@ -161,7 +157,7 @@ def create_sync_sets(source, target, src_files, tar_files):
             choosen_set.add(item)
 
     left_to_right, right_to_left = set(), set()
-    del_src, del_tar = Deleted_items(), Deleted_items() 
+    del_src, del_tar = Deleted_items(source), Deleted_items(target) 
 
     # Loop through all keys in src_files. Root corresponds to existing dirs
     for root in src_files:
