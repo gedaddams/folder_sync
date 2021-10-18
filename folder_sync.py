@@ -26,11 +26,9 @@ def main():
             check_arguments(source, target)
             source = db_helpers.adjust_dirname(source)
             target = db_helpers.adjust_dirname(target)
-
-            if True:
-            # TODO activate following line and remove if True when ready.
-            #if db_helpers.folder_pair_exists(cur, source, target):
-                sync_functions.two_way_sync(source, target, delete, dry_run, verbose)                    
+            pair_id = db_helpers.get_folder_pair_id(cur, source, target)
+            if pair_id:
+                sync_functions.two_way_sync(source, target, pair_id, delete, dry_run, verbose)                    
             else:
                 setup_new_folder_pair(cur, source, target)
         else:
@@ -68,18 +66,19 @@ def setup_new_folder_pair(cur, source, target):
 
     # If program hasn't exited due to error below code runs!
     cur.execute("BEGIN")
-    id = db_helpers.add_folder_pair(cur, source, target)
-    if not id:
+    pair_id = db_helpers.add_folder_pair(cur, source, target)
+    if not pair_id:
         cur.execute("ROLLBACK")
         print("Failed to add folder pair. Exiting!")
         sys.exit(1)
     else:
-        if db_helpers.save_initial_folder_state(id) == 0:
+        items = sync_functions.get_existing_items(source, target)
+        if db_helpers.save_folder_state(pair_id, items) == 0:
             cur.execute("COMMIT")
             print("Succesfully added folder pair for future syncing!")
         else:
             cur.execute("ROLLBACK")
-            print("Couldn't save folder state!")
+            print(f"Couldn't save folder state. Folder pair will have to be reinitialized before next sync!")
 
 
 def normalize_input(user_input):

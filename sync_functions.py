@@ -1,5 +1,6 @@
 from time import time
 from helpers import *
+from db_helpers import save_folder_state
 import os
 import subprocess
 import logging
@@ -9,7 +10,7 @@ import logging
 
 logger = logging.getLogger(__name__)
     
-def two_way_sync(source, target, delete, dry_run, verbose):
+def two_way_sync(source, target, pair_id, delete, dry_run, verbose):
     # TODO Add some kind of ignore list. ex .tmp files should be ignored.
 
     start_time = time()
@@ -53,8 +54,17 @@ def two_way_sync(source, target, delete, dry_run, verbose):
         logger.info("Two-way-syncing completed without error!")
     elif verbose:
         logger.info("Two-way-sync encountered an error!")
+        
+    items = get_existing_items(source, target, del_src_obj, del_tar_obj)
 
-    logging.debug(f"Total time elapsed: {round(time() - start_time, 2)}")
+    if save_folder_state(pair_id, items) == 0:
+        if verbose:
+            print("")
+    else:
+        if verbose:
+            print(f"Couldn't save folder state. Folder pair will have to be reinitialized before next sync!")
+
+    logger.debug(f"Total time elapsed: {round(time() - start_time, 2)}")
 
 
 def create_file_dict(top_directory):
@@ -184,6 +194,30 @@ def create_sync_objects(source, target, src_files, tar_files):
         del_tar)
 
     return sync_obj, del_src, del_tar
+
+
+def get_existing_items(source, target, del_obj_src=None, del_obj_tar=None):
+    """Function generates a list of items (files or dirs) that exist in both
+    source and target dir after syncing. Then it adds items existing 
+    on only 1 side (either) if they coexist in delete objects.
+    """
+    
+    src_items = create_file_dict(source)
+    tar_items = create_file_dict(target)
+
+    # Below operation returns a set after intersection is made.
+    dirs = src_items.keys() & tar_items.keys()
+    files = set()
+    for dir in dirs:
+        common_files = src_items[dir].intersection(tar_items[dir])
+        files.update(common_files)
+        
+    # TODO add logic to add files and dirs in delete object.
+        
+    dirs.discard("")
+    return dirs, files
+
+
 
 
 def rsync(source, target, delete=False, dryrun=False, print_output=True, user_interaction=True):

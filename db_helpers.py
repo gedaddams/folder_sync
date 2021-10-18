@@ -23,14 +23,7 @@ def setup_db():
     return con, cur
 
 
-def save_initial_folder_state(folder_pair_id):
-    """ TODO create function. 
-    This function will save folderstate after first folder pair sync
-    Function should return 0 upon succesful completion otherwise value > 0"""
-    pass
-
-
-def save_folder_state():
+def save_folder_state(folder_pair_id, existing_items):
     # TODO Function will save folder state after sync.
     pass
 
@@ -40,7 +33,7 @@ def adjust_dirname(dirname):
     return os.path.abspath(dirname) + os.path.sep
 
 
-def folder_pair_exists(cur, source, target):
+def get_folder_pair_id(cur, source, target):
     """Checks wether input folder pair already exists in database.
     
     Args:
