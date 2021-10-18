@@ -10,7 +10,7 @@ import logging
 
 logger = logging.getLogger(__name__)
     
-def two_way_sync(source, target, pair_id, delete, dry_run, verbose):
+def two_way_sync(cur, pair_id, source, target, delete, dry_run, verbose):
     # TODO Add some kind of ignore list. ex .tmp files should be ignored.
 
     start_time = time()
@@ -57,15 +57,19 @@ def two_way_sync(source, target, pair_id, delete, dry_run, verbose):
         logger.info("Two-way-sync encountered an error!")
         
     # Gets items that should be saved to db
+    time_point = time()
     files, dirs = get_existing_items(source, target, del_src_obj, del_tar_obj)
+    logger.debug(f"Time for get_existing_items: {round(time() - time_point, 2)}")
 
-    if save_folder_state(pair_id, files, dirs) == 0:
+    time_point = time()
+    if save_folder_state(cur, pair_id, files, dirs) == 0:
         if verbose:
-            print("")
+            print("Succesfully saved folder state!")
     else:
         if verbose:
             print(f"Couldn't save folder state. Folder pair will have to be reinitialized before next sync!")
 
+    logger.debug(f"Time for saving folder state: {round(time() - time_point, 2)}")
     logger.debug(f"Total time elapsed: {round(time() - start_time, 2)}")
 
 
@@ -203,7 +207,7 @@ def get_existing_items(source, target, del_obj_src=None, del_obj_tar=None):
     source and target dir after syncing. Then it adds items existing 
     on only 1 side (either) if they coexist in delete objects.
     """
-    debug_func = True
+    debug_func = False
     src_items = create_file_dict(source)
     tar_items = create_file_dict(target)
 
@@ -244,6 +248,7 @@ def get_existing_items(source, target, del_obj_src=None, del_obj_tar=None):
     dirs.discard("")
 
     if debug_func:
+        # These print calls can cause errors if sets are empty!
         print(f"\nAll dirs: {all_dirs}")
         print(f"\nMutual dirs: {mutual_dirs}")
         print(f"\nAll files: {all_files}")

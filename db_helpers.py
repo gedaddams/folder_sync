@@ -23,10 +23,48 @@ def setup_db():
     return con, cur
 
 
-def save_folder_state(folder_pair_id, files, dirs):
-    # TODO Function will save folder state after sync.
-    pass
+def save_folder_state(cur, folder_pair_id, files, dirs):
 
+    sql_delete_files = """DELETE FROM files 
+    WHERE id = ?;"""
+    sql_delete_folders= """DELETE FROM folders 
+    WHERE id = ?;"""
+    sql_delete_folder_pair = """DELETE FROM folder_pairs 
+    WHERE id = ?;"""
+    sql_insert_files = """INSERT INTO files (folder_pair_id, file) 
+    VALUES (?, ?);"""
+    sql_insert_folders = """INSERT INTO folders (folder_pair_id, folder) 
+    VALUES (?, ?);"""
+    
+    # file_list and dir_list will be list of tuples where the first item in
+    # each tuple will be the folder_pair id.
+    file_list = []
+    dir_list = []
+
+#    try:
+    for item in files:
+        file_list.append((folder_pair_id, item))
+        
+    for item in dirs:
+        dir_list.append((folder_pair_id, item))
+
+    print(f"\n{dir_list}")
+    print(f"\n{file_list}\n")
+    cur.execute(sql_delete_folders, (folder_pair_id,))
+    cur.execute(sql_delete_files, (folder_pair_id,))
+    cur.executemany(sql_insert_folders, dir_list)
+    cur.executemany(sql_insert_files, file_list)
+    return 0
+#    except Exception:
+#        try:
+#            cur.execute(sql_delete_folder_pair, (folder_pair_id,))
+#            cur.execute(sql_delete_folders)
+#            cur.execute(sql_delete_files)
+#            return 1
+#        except Exception:
+#            logger.critical("Critical error while saving folder state. Use extreme cautions syncing this folder pair next time. Do dry run first!")
+#            return 2
+    
 
 def adjust_dirname(dirname):
     """adjust dirname to always end with separator (in linux = /)"""
