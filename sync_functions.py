@@ -37,17 +37,18 @@ def two_way_sync(source, target, pair_id, delete, dry_run, verbose):
 
     # DOES THE DELETIONS
     time_point = time()
-    if delete:
+    if delete and not dry_run:
         del_src_obj.delete_items()
         del_tar_obj.delete_items()
     logger.debug(f"Time for deleting {round(time() - time_point)}")
     
-    # TODO check that same path doesnt exist both in lr_set and rl_set.
-    # Could happen if file with same name as dir on other side.
+    # Checks that same path doesnt exist both in lr_set and rl_set which could
+    # happen if file exists on one side with same name as dir on other side.
     time_point = time()
     sync_obj.remove_intersection(verbose)
     logger.debug(f"Time for intersection testing: {round(time() - time_point, 2)}")
     
+    # Syncs and then checks return codes
     return_src_to_tar, return_tar_to_src = sync_obj.sync(delete, dry_run, verbose)
     ok_exit_codes = {0, 49, 50} # O = OK, 49 = aborted by user, 50 = already synced
     if verbose and return_src_to_tar in ok_exit_codes and return_tar_to_src in ok_exit_codes:
@@ -55,9 +56,10 @@ def two_way_sync(source, target, pair_id, delete, dry_run, verbose):
     elif verbose:
         logger.info("Two-way-sync encountered an error!")
         
-    items = get_existing_items(source, target, del_src_obj, del_tar_obj)
+    # Gets items that should be saved to db
+    files, dirs = get_existing_items(source, target, del_src_obj, del_tar_obj)
 
-    if save_folder_state(pair_id, items) == 0:
+    if save_folder_state(pair_id, files, dirs) == 0:
         if verbose:
             print("")
     else:
@@ -111,13 +113,13 @@ def create_file_dict(top_directory):
 def file_existed(a_file):
     # TODO check wether file existed in previous sync --> return true/false
     # Will need to check vs sqlite database
-    return False
+    return True
 
 
 def dir_existed(a_dir):
     # TODO check wether dir existed in previous sync --> return true/false
     # Will need to check vs sqlite database
-    return False
+    return True
 
 
 def create_sync_objects(source, target, src_files, tar_files):
@@ -201,23 +203,56 @@ def get_existing_items(source, target, del_obj_src=None, del_obj_tar=None):
     source and target dir after syncing. Then it adds items existing 
     on only 1 side (either) if they coexist in delete objects.
     """
-    
+    debug_func = True
     src_items = create_file_dict(source)
     tar_items = create_file_dict(target)
 
     # Below operation returns a set after intersection is made.
-    dirs = src_items.keys() & tar_items.keys()
-    files = set()
-    for dir in dirs:
-        common_files = src_items[dir].intersection(tar_items[dir])
-        files.update(common_files)
+    src_dirs, tar_dirs = set(src_items.keys()), set(tar_items.keys())
+    mutual_dirs = src_dirs & tar_dirs
+    all_dirs = src_dirs | tar_dirs
+    mutual_files, all_files = set(), set()
+
+    for dir in all_dirs:
+        src_files = src_items.get(dir, set())
+        tar_files = tar_items.get(dir, set())
+        mutual_files_in_dir = src_files & tar_files
+        all_files_in_dir = src_files | tar_files
+        mutual_files.update(mutual_files_in_dir)
+        all_files.update(all_files_in_dir)
         
-    # TODO add logic to add files and dirs in delete object.
+    if del_obj_src and del_obj_tar:
+        delete_dirs = del_obj_src.dirs | del_obj_tar.dirs
+        delete_files = del_obj_src.get_all_files() | del_obj_tar.get_all_files()
+        exclusive_dirs = all_dirs - mutual_dirs
+        exclusive_files = all_files - mutual_files
+
+        # extra here references that these files need to 'exist' in db to be
+        # deleted when user turns on deletions. If programs work deletions=False 
+        # should be the only reason for items to exist in extra_dirs and extra_files.
+        extra_dirs = delete_dirs & exclusive_dirs
+        extra_files = delete_files & exclusive_files
+        dirs = mutual_dirs | extra_dirs
+        files = mutual_files | extra_files
         
+    elif del_obj_src or del_obj_tar:
+        raise ValueError("Provide zero or two delete objects. Not 1!")
+    else:
+        files = mutual_files
+        dirs = mutual_dirs
+
     dirs.discard("")
+
+    if debug_func:
+        print(f"\nAll dirs: {all_dirs}")
+        print(f"\nMutual dirs: {mutual_dirs}")
+        print(f"\nAll files: {all_files}")
+        print(f"\nExtra dirs: {extra_dirs}")
+        print(f"\nExtra files: {extra_files}")
+        print(f"\nReturned dirs: {dirs}")
+        print(f"\nReturned files: {files}\n")
+
     return dirs, files
-
-
 
 
 def rsync(source, target, delete=False, dryrun=False, print_output=True, user_interaction=True):

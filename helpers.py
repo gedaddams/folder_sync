@@ -225,8 +225,8 @@ class Deleter:
         self.files_in_deleted_dirs = set()
         self.root_dir = root_dir
         
-    def get_all_items(self):
-        return self.files.union(self.dirs, self.files_in_deleted_dirs)
+    def get_all_files(self):
+        return self.files.union(self.files_in_deleted_dirs)
 
     def is_empty(self):
         return not self.files and not self.dirs and not self.files_in_deleted_dirs

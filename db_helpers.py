@@ -23,7 +23,7 @@ def setup_db():
     return con, cur
 
 
-def save_folder_state(folder_pair_id, existing_items):
+def save_folder_state(folder_pair_id, files, dirs):
     # TODO Function will save folder state after sync.
     pass
 
