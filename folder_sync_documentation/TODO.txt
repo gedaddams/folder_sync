@@ -1,3 +1,5 @@
 ﻿folder_sync TODO
 
     - Maybe shorten and optimize get_existing_items. Function also needs more testing.
+    - Make deletions work over ssh
+    - Add safe_mode as default mode where you always first do a dry run and if you accept output then do real sync.

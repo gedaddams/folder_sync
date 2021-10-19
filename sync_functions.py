@@ -38,7 +38,6 @@ def two_way_sync(pair_id, source, target, delete, dry_run, verbose):
         elif delete and dry_run:
             print("\nTHE FOLLOWING ITEMS WOULD HAVE BEEN DELETED!: (dry run)\n")
             del_src_obj.dryrun_delete_items()
-            print()
             del_tar_obj.dryrun_delete_items()
         logger.debug(f"Time for deleting {round(time() - time_point)}")
     else:
@@ -141,7 +140,7 @@ def create_sync_objects(source, target, src_files, tar_files, pair_id):
         for dir in state_dict["items"]:
             dirs.add(dir)
             for item in state_dict["items"][dir]:
-                files.add(item)
+                files.add(os.path.join(dir, item))
         
         dirs.discard("")
         return
