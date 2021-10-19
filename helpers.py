@@ -136,12 +136,9 @@ class Syncer:
 
         if obj_return.stdout:
             if print_output:
-                print(format_rsync_output(obj_return.stdout))
+                print(format_rsync_output(obj_return.stdout), end="")
         else:
             if not obj_return.stderr:
-                if print_output:
-                    print("Folders are already completely synced!")
-
                 already_synced = 50
                 return already_synced
 
@@ -213,6 +210,8 @@ class Syncer:
 
         return_lr = self.__run_rsync(arglist_lr, print_output)
         return_rl = self.__run_rsync(arglist_rl, print_output)
+        if print_output and return_lr == 50 and return_rl == 50:
+            print("\nFOLDERS ARE ALREADY COMPLETELY SYNCED!")
         self.__delete_textfiles()
         return return_lr, return_rl
     
@@ -234,10 +233,14 @@ class Deleter:
     def delete_items(self):
         for item in self.files:
             path = os.path.join(self.root_dir, item)
-            print(f"Deleting file: {path}")
+            print(f"DELETING FILE: {path}")
             os.unlink(path)
         
         for item in self.dirs:
             path = os.path.join(self.root_dir, item)
-            print(f"Deleting directory: {path}")
+            print(f"DELETING DIRECTORY: {path}")
             rmtree(path)
+            
+    def dryrun_delete_items(self):
+        [print(f"DELETING FILE (dry run): {item}") for item in self.files]
+        [print(f"DELETING DIRECTORY (dry run): {item}") for item in self.dirs]

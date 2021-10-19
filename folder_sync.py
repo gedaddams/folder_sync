@@ -28,7 +28,7 @@ def main():
             target = db_helpers.adjust_dirname(target)
             pair_id = db_helpers.get_folder_pair_id(cur, source, target)
             if pair_id:
-                sync_functions.two_way_sync(cur, pair_id, source, target, delete, dry_run, verbose)                    
+                sync_functions.two_way_sync(pair_id, source, target, delete, dry_run, verbose)                    
             else:
                 setup_new_folder_pair(cur, source, target)
         else:
@@ -72,7 +72,7 @@ def setup_new_folder_pair(cur, source, target):
         print("Failed to add folder pair. Exiting!")
         sys.exit(1)
     else:
-        files, dirs = sync_functions.get_existing_items(source, target)
+        dirs, files = sync_functions.get_existing_items(source, target)
         if db_helpers.save_folder_state(pair_id, list(files), list(dirs)) == 0:
             cur.execute("COMMIT")
             print("Succesfully added folder pair for future syncing!")

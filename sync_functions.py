@@ -1,16 +1,17 @@
 from time import time
 from helpers import *
-from db_helpers import save_folder_state
+from db_helpers import save_folder_state, get_json_filepath
 import os
 import subprocess
 import logging
+import json
 
 """ Syncs 2 folders (or 2 files). Depends on python3 (with imports above), rsync and sqlite.
 """
 
 logger = logging.getLogger(__name__)
     
-def two_way_sync(cur, pair_id, source, target, delete, dry_run, verbose):
+def two_way_sync(pair_id, source, target, delete, dry_run, verbose):
     # TODO Add some kind of ignore list. ex .tmp files should be ignored.
 
     start_time = time()
@@ -21,26 +22,35 @@ def two_way_sync(cur, pair_id, source, target, delete, dry_run, verbose):
     logger.debug(f"Time for create_file_dict 2 {round(time() - time_point, 2)}")
     time_point = time()
     sync_obj, del_src_obj, del_tar_obj = \
-        create_sync_objects(source, target, source_files, target_files)
+        create_sync_objects(source, target, source_files, target_files, pair_id)
     logger.debug(f"Time for create_sync_sets {round(time() - time_point, 2)}")
     #logger.debug(f"lr list: {lr_set}\nrl list: {rl_set}\ndel src list: {del_src_obj}\ndel tar list: {del_tar_obj}")
+
+    # DOES THE DELETIONS
+    if not del_src_obj.is_empty() or not del_tar_obj.is_empty():
+        time_point = time()
+        if delete and not dry_run:
+            print()
+            del_src_obj.delete_items()
+            del_tar_obj.delete_items()
+        elif delete and dry_run:
+            print("\nTHE FOLLOWING ITEMS WOULD HAVE BEEN DELETED!: (dry run)\n")
+            del_src_obj.dryrun_delete_items()
+            print()
+            del_tar_obj.dryrun_delete_items()
+        logger.debug(f"Time for deleting {round(time() - time_point)}")
+    else:
+        if delete and verbose:
+            print("\nTHERE ARE NO ITEMS TO DELETE!")
 
     # Returns if all relevant lists are empty!
     if sync_obj.is_empty():
         if delete:
-            if del_src_obj.is_empty() and del_tar_obj.is_empty():
-                print("Folders are already in sync!")
-                return
-        else:
-            print("Folders are already in sync (at least with deletions deactivated)!")
+            print("\nFOLDERS ARE COMPLETELY IN SYNC!\n")
             return
-
-    # DOES THE DELETIONS
-    time_point = time()
-    if delete and not dry_run:
-        del_src_obj.delete_items()
-        del_tar_obj.delete_items()
-    logger.debug(f"Time for deleting {round(time() - time_point)}")
+        else:
+            print("\nFOLDERS ARE ALREADY IN SYNC! (at least with deletions deactivated)\n")
+            return
     
     # Checks that same path doesnt exist both in lr_set and rl_set which could
     # happen if file exists on one side with same name as dir on other side.
@@ -49,25 +59,30 @@ def two_way_sync(cur, pair_id, source, target, delete, dry_run, verbose):
     logger.debug(f"Time for intersection testing: {round(time() - time_point, 2)}")
     
     # Syncs and then checks return codes
-    return_src_to_tar, return_tar_to_src = sync_obj.sync(delete, dry_run, verbose)
-    ok_exit_codes = {0, 49, 50} # O = OK, 49 = aborted by user, 50 = already synced
-    if verbose and return_src_to_tar in ok_exit_codes and return_tar_to_src in ok_exit_codes:
-        logger.info("Two-way-syncing completed without error!")
-    elif verbose:
-        logger.info("Two-way-sync encountered an error!")
+    if dry_run and verbose:
+        # Function ends before this if sync object is empty, see above!
+        print("\nTHE FOLLOWING ITEMS WOULD HAVE BEEN UPDATED/CREATED!: (dry run)")
         
-    # Gets items that should be saved to db
+    return_src_to_tar, return_tar_to_src = sync_obj.sync(False, dry_run, verbose)
+    ok_exit_codes = {0, 49, 50} # O = OK, 49 = aborted by user, 50 = already synced
+    print() # Newline needed!
+    if verbose and return_src_to_tar in ok_exit_codes and return_tar_to_src in ok_exit_codes:
+        print("Two-way-syncing completed without error!")
+    elif verbose:
+        print("Two-way-sync encountered an error!")
+        
+    # Gets items that should be saved to json.file
     time_point = time()
-    files, dirs = get_existing_items(source, target, del_src_obj, del_tar_obj)
+    dirs, files = get_existing_items(source, target, del_src_obj, del_tar_obj)
     logger.debug(f"Time for get_existing_items: {round(time() - time_point, 2)}")
 
     time_point = time()
-    if save_folder_state(cur, pair_id, files, dirs) == 0:
+    if save_folder_state(pair_id, list(files), list(dirs)) == 0:
         if verbose:
-            print("Succesfully saved folder state!")
+            print("\nSuccesfully saved folder state!")
     else:
         if verbose:
-            print(f"Couldn't save folder state. Folder pair will have to be reinitialized before next sync!")
+            print(f"\nCouldn't save folder state. Folder pair will have to be reinitialized before next sync!")
 
     logger.debug(f"Time for saving folder state: {round(time() - time_point, 2)}")
     logger.debug(f"Total time elapsed: {round(time() - start_time, 2)}")
@@ -114,22 +129,18 @@ def create_file_dict(top_directory):
     return file_dict
 
 
-def file_existed(a_file):
-    # TODO check wether file existed in previous sync --> return true/false
-    # Will need to check vs sqlite database
-    return True
+def create_sync_objects(source, target, src_files, tar_files, pair_id):
+    json_filepath = get_json_filepath(pair_id)
+    with open(json_filepath, "r") as json_file:
+        state_dict = json.load(json_file)
+    dirs, files= set(state_dict["dirs"]), set(state_dict["files"])
 
+    def dir_existed(a_dir):
+        return a_dir in dirs
 
-def dir_existed(a_dir):
-    # TODO check wether dir existed in previous sync --> return true/false
-    # Will need to check vs sqlite database
-    return True
+    def file_existed(a_file):
+        return a_file in files
 
-
-def create_sync_objects(source, target, src_files, tar_files):
-    # TODO Figure out how to handle if there exist dir on one side with same
-    # path as file on other side. Maybe always append dir even if have files
-    # and do some kind of set union?
     def add_or_delete_item(a_file, add_set, del_obj):
         if file_existed(a_file):
             del_obj.files.add(a_file)

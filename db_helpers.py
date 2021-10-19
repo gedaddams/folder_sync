@@ -1,6 +1,5 @@
 import sqlite3
 import os
-import sys
 import logging
 import json
 
@@ -13,12 +12,16 @@ Folder pairs and configuration data is saved in sqlite database file.
 
 logger = logging.getLogger(__name__)
 
-file_path = os.path.realpath(__file__)
-dir_path = os.path.dirname(file_path)
-db_relpath = os.path.join(".folder_sync_config", "folder_sync.db")
-db_filepath = os.path.join(dir_path, db_relpath)
+def get_db_filepath():
+    file_path = os.path.realpath(__file__)
+    dir_path = os.path.dirname(file_path)
+    db_relpath = os.path.join(".folder_sync_config", "folder_sync.db")
+    db_filepath = os.path.join(dir_path, db_relpath)
+    return db_filepath
+
 
 def setup_db():
+    db_filepath = get_db_filepath()
     if not os.path.isfile(db_filepath):
         from create_db import create_db
         con = sqlite3.connect(db_filepath, isolation_level=None) 
@@ -31,11 +34,18 @@ def setup_db():
     return con, cur
 
 
-def save_folder_state(folder_pair_id: int, files: list, dirs: list) -> None:
-
+def get_json_filepath(folder_pair_id):
+    file_path = os.path.realpath(__file__)
+    dir_path = os.path.dirname(file_path)
     json_file_name = "folder_pair_" + str(folder_pair_id) + ".json"
     json_file_path = os.path.join(dir_path, ".folder_sync_config", 
     "folder_pair_states", json_file_name)
+    return json_file_path
+
+
+def save_folder_state(folder_pair_id: int, files: list, dirs: list) -> None:
+
+    json_file_path = get_json_filepath(folder_pair_id)
     state_dict = {"id": folder_pair_id, "files": files, "dirs": dirs}
 
     try:
@@ -110,8 +120,9 @@ def add_folder_pair(cur, source, target):
     try:
         cur.execute(sql_insertfolderpair, (source, target))
         return cur.lastrowid
-    except:
+    except Exception as error:
         print("Couldn't add folder pair")
+        print(error)
         return 0 # Evaluates to false in boolean expression
 
 
