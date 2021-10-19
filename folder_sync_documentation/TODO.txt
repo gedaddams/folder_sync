@@ -1,6 +1,3 @@
 ﻿folder_sync TODO
 
-    - Add folders table to db. The table should be identical to files table except it is supposed to hold path to
-    dirs instead of files.
-    - Right now symlink to folders are not added correctly by create_file_dict.
-    This needs fixing.
+    - Maybe shorten and optimize get_existing_items. Function also needs more testing.

@@ -2,18 +2,26 @@ import sqlite3
 import os
 import sys
 import logging
+import json
+
+"""
+Module saves most of its data in json files in folder:
+./folder_sync_config/folder_pair_states
+
+Folder pairs and configuration data is saved in sqlite database file.
+"""
 
 logger = logging.getLogger(__name__)
 
 file_path = os.path.realpath(__file__)
 dir_path = os.path.dirname(file_path)
-db_name = ".folder_sync.db"
-db_filepath = os.path.join(dir_path, db_name)
+db_relpath = os.path.join(".folder_sync_config", "folder_sync.db")
+db_filepath = os.path.join(dir_path, db_relpath)
 
 def setup_db():
     if not os.path.isfile(db_filepath):
         from create_db import create_db
-        con = sqlite3.connect(db_filepath, isolation_level=None)
+        con = sqlite3.connect(db_filepath, isolation_level=None) 
         cur = con.cursor()
         create_db(cur)
     else: 
@@ -23,48 +31,21 @@ def setup_db():
     return con, cur
 
 
-def save_folder_state(cur, folder_pair_id, files, dirs):
+def save_folder_state(folder_pair_id: int, files: list, dirs: list) -> None:
 
-    sql_delete_files = """DELETE FROM files 
-    WHERE id = ?;"""
-    sql_delete_folders= """DELETE FROM folders 
-    WHERE id = ?;"""
-    sql_delete_folder_pair = """DELETE FROM folder_pairs 
-    WHERE id = ?;"""
-    sql_insert_files = """INSERT INTO files (folder_pair_id, file) 
-    VALUES (?, ?);"""
-    sql_insert_folders = """INSERT INTO folders (folder_pair_id, folder) 
-    VALUES (?, ?);"""
-    
-    # file_list and dir_list will be list of tuples where the first item in
-    # each tuple will be the folder_pair id.
-    file_list = []
-    dir_list = []
+    json_file_name = "folder_pair_" + str(folder_pair_id) + ".json"
+    json_file_path = os.path.join(dir_path, ".folder_sync_config", 
+    "folder_pair_states", json_file_name)
+    state_dict = {"id": folder_pair_id, "files": files, "dirs": dirs}
 
-#    try:
-    for item in files:
-        file_list.append((folder_pair_id, item))
+    try:
+        with open(json_file_path, "w") as outfile:
+            json.dump(state_dict, outfile)
+            return 0
+    except Exception as error:
+        logger.warning(error)
+        return 1
         
-    for item in dirs:
-        dir_list.append((folder_pair_id, item))
-
-    print(f"\n{dir_list}")
-    print(f"\n{file_list}\n")
-    cur.execute(sql_delete_folders, (folder_pair_id,))
-    cur.execute(sql_delete_files, (folder_pair_id,))
-    cur.executemany(sql_insert_folders, dir_list)
-    cur.executemany(sql_insert_files, file_list)
-    return 0
-#    except Exception:
-#        try:
-#            cur.execute(sql_delete_folder_pair, (folder_pair_id,))
-#            cur.execute(sql_delete_folders)
-#            cur.execute(sql_delete_files)
-#            return 1
-#        except Exception:
-#            logger.critical("Critical error while saving folder state. Use extreme cautions syncing this folder pair next time. Do dry run first!")
-#            return 2
-    
 
 def adjust_dirname(dirname):
     """adjust dirname to always end with separator (in linux = /)"""
@@ -123,8 +104,6 @@ def add_folder_pair(cur, source, target):
         error_message = "Both source and target arguments to add_folder_pair need to be directories"
         raise Exception(error_message)
     
-    source, target = adjust_dirname(source), adjust_dirname(target)
-
     sql_insertfolderpair = """INSERT INTO folder_pairs 
     (source, target) VALUES (?, ?);"""
 

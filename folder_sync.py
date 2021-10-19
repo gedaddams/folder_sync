@@ -73,7 +73,7 @@ def setup_new_folder_pair(cur, source, target):
         sys.exit(1)
     else:
         files, dirs = sync_functions.get_existing_items(source, target)
-        if db_helpers.save_folder_state(cur, pair_id, files, dirs) == 0:
+        if db_helpers.save_folder_state(pair_id, list(files), list(dirs)) == 0:
             cur.execute("COMMIT")
             print("Succesfully added folder pair for future syncing!")
         else:
