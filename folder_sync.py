@@ -30,6 +30,9 @@ def main():
             if pair_id:
                 sync_functions.two_way_sync(pair_id, source, target, delete, dry_run, verbose)                    
             else:
+                if dry_run:
+                    print("Dry run not possible when syncing folder pair for the first time. Even without the '-n' flag dryrun will run once (you can abort) when setting up!")
+                    sys.exit(4)
                 setup_new_folder_pair(cur, source, target)
         else:
             # TODO Add cli interface
@@ -72,8 +75,8 @@ def setup_new_folder_pair(cur, source, target):
         print("Failed to add folder pair. Exiting!")
         sys.exit(1)
     else:
-        dirs, files = sync_functions.get_existing_items(source, target)
-        if db_helpers.save_folder_state(pair_id, list(files), list(dirs)) == 0:
+        items = sync_functions.get_existing_items(source, target)
+        if db_helpers.save_folder_state(source, target, items, pair_id) == 0:
             cur.execute("COMMIT")
             print("Succesfully added folder pair for future syncing!")
         else:

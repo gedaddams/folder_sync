@@ -27,11 +27,13 @@ def two_way_sync(pair_id, source, target, delete, dry_run, verbose):
     #logger.debug(f"lr list: {lr_set}\nrl list: {rl_set}\ndel src list: {del_src_obj}\ndel tar list: {del_tar_obj}")
 
     # DOES THE DELETIONS
+    has_deleted = False
     if not del_src_obj.is_empty() or not del_tar_obj.is_empty():
         time_point = time()
         if delete and not dry_run:
             print()
             del_src_obj.delete_items()
+            has_deleted = True
             del_tar_obj.delete_items()
         elif delete and dry_run:
             print("\nTHE FOLLOWING ITEMS WOULD HAVE BEEN DELETED!: (dry run)\n")
@@ -43,12 +45,12 @@ def two_way_sync(pair_id, source, target, delete, dry_run, verbose):
         if delete and verbose:
             print("\nTHERE ARE NO ITEMS TO DELETE!")
 
-    # Returns if all relevant lists are empty!
+    # RETURNS IF sync_obj IS EMPTY AND NO DELETIONS HAS OCCURED!
     if sync_obj.is_empty():
-        if delete:
+        if delete and not has_deleted:
             print("\nFOLDERS ARE COMPLETELY IN SYNC!\n")
             return
-        else:
+        elif not delete:
             print("\nFOLDERS ARE ALREADY IN SYNC! (at least with deletions deactivated)\n")
             return
     
@@ -58,11 +60,11 @@ def two_way_sync(pair_id, source, target, delete, dry_run, verbose):
     sync_obj.remove_intersection(verbose)
     logger.debug(f"Time for intersection testing: {round(time() - time_point, 2)}")
     
-    # Syncs and then checks return codes
     if dry_run and verbose:
         # Function ends before this if sync object is empty, see above!
         print("\nTHE FOLLOWING ITEMS WOULD HAVE BEEN UPDATED/CREATED!: (dry run)")
         
+    # SYNCS AND CHECKS RETURN CODES
     return_src_to_tar, return_tar_to_src = sync_obj.sync(False, dry_run, verbose)
     ok_exit_codes = {0, 49, 50} # O = OK, 49 = aborted by user, 50 = already synced
     print() # Newline needed!
@@ -73,11 +75,11 @@ def two_way_sync(pair_id, source, target, delete, dry_run, verbose):
         
     # Gets items that should be saved to json.file
     time_point = time()
-    dirs, files = get_existing_items(source, target, del_src_obj, del_tar_obj)
+    item_dict = get_existing_items(source, target, del_src_obj, del_tar_obj)
     logger.debug(f"Time for get_existing_items: {round(time() - time_point, 2)}")
 
     time_point = time()
-    if save_folder_state(pair_id, list(files), list(dirs)) == 0:
+    if save_folder_state(source, target, item_dict, pair_id) == 0:
         if verbose:
             print("\nSuccesfully saved folder state!")
     else:
@@ -130,10 +132,19 @@ def create_file_dict(top_directory):
 
 
 def create_sync_objects(source, target, src_files, tar_files, pair_id):
-    json_filepath = get_json_filepath(pair_id)
-    with open(json_filepath, "r") as json_file:
-        state_dict = json.load(json_file)
-    dirs, files= set(state_dict["dirs"]), set(state_dict["files"])
+    dirs, files = set(), set()
+
+    def get_saved_items():
+        json_filepath = get_json_filepath(pair_id)
+        with open(json_filepath, "r") as json_file:
+            state_dict = json.load(json_file)
+        for dir in state_dict["items"]:
+            dirs.add(dir)
+            for item in state_dict["items"][dir]:
+                files.add(item)
+        
+        dirs.discard("")
+        return
 
     def dir_existed(a_dir):
         return a_dir in dirs
@@ -162,6 +173,7 @@ def create_sync_objects(source, target, src_files, tar_files, pair_id):
         for item in dict_of_files_in_root:
             choosen_set.add(item)
 
+    get_saved_items()
     del_src, del_tar = Deleter(source), Deleter(target) 
     sync_obj = Syncer(source, target)
     left_to_right, right_to_left = sync_obj.lr_items, sync_obj.rl_items 
@@ -218,7 +230,6 @@ def get_existing_items(source, target, del_obj_src=None, del_obj_tar=None):
     source and target dir after syncing. Then it adds items existing 
     on only 1 side (either) if they coexist in delete objects.
     """
-    debug_func = False
     src_items = create_file_dict(source)
     tar_items = create_file_dict(target)
 
@@ -256,19 +267,19 @@ def get_existing_items(source, target, del_obj_src=None, del_obj_tar=None):
         files = mutual_files
         dirs = mutual_dirs
 
-    dirs.discard("")
+    item_dict = {}
+    for dir in dirs:
+        item_dict[dir] = []
+    
+    for item in files:
+        file_name, dir = os.path.basename(item), os.path.dirname(item)
+        # TODO: Not sure below if condition is necessary.
+        if not dir in item_dict:
+            logger.debug(f"dir path: {dir} was no in dirs but in files!")
+            item_dict[dir] = []
+        item_dict[dir].append(file_name)
 
-    if debug_func:
-        # These print calls can cause errors if sets are empty!
-        print(f"\nAll dirs: {all_dirs}")
-        print(f"\nMutual dirs: {mutual_dirs}")
-        print(f"\nAll files: {all_files}")
-        print(f"\nExtra dirs: {extra_dirs}")
-        print(f"\nExtra files: {extra_files}")
-        print(f"\nReturned dirs: {dirs}")
-        print(f"\nReturned files: {files}\n")
-
-    return dirs, files
+    return item_dict
 
 
 def rsync(source, target, delete=False, dryrun=False, print_output=True, user_interaction=True):

@@ -90,8 +90,9 @@ class Syncer:
     def __create_textfiles(self):
         # Private method to create textfiles necessary for rsync call.
         script_dir = os.path.dirname(os.path.realpath(__file__))
+        config_dir = os.path.join("./folder_sync_config", script_dir)
 
-        self.__txtfile_lr_path = os.path.join(script_dir, "lr_sync.tmp")
+        self.__txtfile_lr_path = os.path.join(config_dir, "lr_sync.tmp")
         with open(self.__txtfile_lr_path, 'w') as file_lr:
             file_lr.writelines([line + '\n' for line in self.lr_items])
 

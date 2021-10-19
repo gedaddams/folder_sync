@@ -38,15 +38,14 @@ def get_json_filepath(folder_pair_id):
     file_path = os.path.realpath(__file__)
     dir_path = os.path.dirname(file_path)
     json_file_name = "folder_pair_" + str(folder_pair_id) + ".json"
-    json_file_path = os.path.join(dir_path, ".folder_sync_config", 
-    "folder_pair_states", json_file_name)
+    json_file_path = os.path.join(dir_path, ".folder_sync_config", "folder_pair_states", json_file_name)
     return json_file_path
 
 
-def save_folder_state(folder_pair_id: int, files: list, dirs: list) -> None:
+def save_folder_state(source, target, item_dict, folder_pair_id) -> None:
 
     json_file_path = get_json_filepath(folder_pair_id)
-    state_dict = {"id": folder_pair_id, "files": files, "dirs": dirs}
+    state_dict = {"source": source, "target": target, "id": folder_pair_id, "items": item_dict}
 
     try:
         with open(json_file_path, "w") as outfile:

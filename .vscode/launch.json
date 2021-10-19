@@ -12,8 +12,8 @@
             "console": "integratedTerminal",
             //"args": ["-s", "~/Documents/testdir", "-t", "~/Documents/testdir_copy", "-n", "true"]
             //"args": ["-s", "~", "-t", "~"]
-            "args": ["-s", "~/Documents/testdir", "-t", "~/Documents/testdir_copy", "-d", "true", "-n", "true"]
-            //"args": ["-s", "/mnt/d/Filer/", "-t", "~/Documents/filer_kopia/"]
+            //"args": ["-s", "~/Documents/testdir", "-t", "~/Documents/testdir_copy", "-d", "true", "-n", "true"]
+            "args": ["-s", "/mnt/d/Filer/", "-t", "~/Documents/filer_kopia/", "-d", "true", "-n", "true"]
         }
     ]
 }
