@@ -53,12 +53,26 @@ def test_json(top_dir):
     print(type(test_from_file)) # --> <class 'dict'>
     #print(test_from_file)
 
+def test_and():
+    def its_true():
+        print("its true")
+        return True
+    def its_false():
+        print("its false")
+        return False
+    
+    if its_false() and its_true():
+        pass
+
+
 if __name__ == "__main__":
     #excluder_test(["/home/ged/Documents/globtest_dir/link_to_linked_dir/"])
-    excluder_test(["/home/ged/"])
+    #excluder_test(["/home/ged/Documents/", "/home/ged/Documents/globtest_dir/"])
+    
+#test_and()
 
-#    print()
-#    exclude_dir_from_os_walk("/home/ged/Documents/testdir", {"innerdir"})
-#    print()
-#    exclude_dir_from_os_walk("/home/ged/Documents/testdir")
-#    print()
+    print()
+    exclude_dir_from_os_walk("/home/ged/Documents/testdir", {"innerdir"})
+    print()
+    exclude_dir_from_os_walk("/home/ged/Documents/testdir")
+    print()

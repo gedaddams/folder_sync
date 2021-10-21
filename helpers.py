@@ -82,8 +82,7 @@ class Excluder:
         self.dirs = set()
         self.files = set()
 
-        for item in exclude_list:
-        
+        for item in exclude_list:        
             if os.path.isfile(item) or os.path.islink(item):
                 self.files.add(item)
                 continue
@@ -94,6 +93,8 @@ class Excluder:
                 # TODO add previous dirs path to item paths
                 list1 = os.listdir(item[:-1])
                 iterate_obj = list(map(lambda x : os.path.join(item,x), list1))
+            elif os.path.isdir(item):
+                self.dirs.add(item)
             else:
                 iterate_obj = glob.iglob(item)
 
@@ -105,9 +106,19 @@ class Excluder:
                     self.dirs.add(path)
                     continue
                 self.files.add(path)
+        
+        self.__create_excl_dict()
+        
+    def __create_excl_dict(self):
+        self.excl_dict = {}
+        for file_path in self.files:
+            dir_path = os.path.dirname(file_path)
+            if not dir_path in self.excl_dict:
+                self.excl_dict[dir_path] = set()
+            self.excl_dict[dir_path].add(file_path)
                 
     def __repr__(self):
-        return f"excl-dirs: {self.dirs}\nexcl-files: {self.files}"
+        return f"\nexcl-dirs: {self.dirs}\n\nexcl-files: {self.files}\n\n excl_dict: {self.excl_dict}\n"
 
 
 class Syncer:
