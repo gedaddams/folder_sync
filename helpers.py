@@ -1,8 +1,9 @@
 """This module contains classes and function format_rsync_output"""
 import os
 import subprocess
+import glob
 from shutil import rmtree
-from time import strftime, localtime
+
 
 def format_rsync_output(st_ouput):
     # This formating function will only work reliable if not using -v or -P for rsync call.
@@ -72,6 +73,27 @@ def format_rsync_output(st_ouput):
     modified.sort()
     return_list = msg_list + [""] + created + [""] + modified
     return (os.linesep).join(return_list)
+
+
+class Excluder:
+
+    def __init__(self, exclude_list):
+        # TODO maybe reade excludes from file instead of list.
+        self.dirs = set()
+        self.files = set()
+
+        for item in exclude_list:
+            for path in glob.glob(item):
+                if os.path.isdir(path):
+                    if os.path.islink(path):
+                        self.files.add(path)
+                        continue
+                    self.dirs.add(path)
+                    continue
+                self.files.add(path)
+                
+    def __repr__(self):
+        return f"excl-dirs: {self.dirs}\nexcl-files: {self.files}"
 
 
 class Syncer:

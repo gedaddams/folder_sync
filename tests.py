@@ -1,6 +1,7 @@
 import sync_functions
 import json
 import os
+from helpers import Excluder
 from time import time
 
 
@@ -16,6 +17,11 @@ def exclude_dir_from_os_walk(top_dir, exclude_set=None):
         dirs[:] = [d for d in dirs if d not in excl_inner]
         print(root)
         print(files)
+
+
+def excluder_test(excl_list):
+    excl_obj = Excluder(excl_list)
+    print(excl_obj)
 
 
 def test_get_existing_items_no_delete_objects():
@@ -48,8 +54,10 @@ def test_json(top_dir):
     #print(test_from_file)
 
 if __name__ == "__main__":
-    print()
-    exclude_dir_from_os_walk("/home/ged/Documents/testdir", {"innerdir"})
-    print()
-    exclude_dir_from_os_walk("/home/ged/Documents/testdir")
-    print()
+    excluder_test(["/home/ged/Documents/testdir/*"])
+
+#    print()
+#    exclude_dir_from_os_walk("/home/ged/Documents/testdir", {"innerdir"})
+#    print()
+#    exclude_dir_from_os_walk("/home/ged/Documents/testdir")
+#    print()
