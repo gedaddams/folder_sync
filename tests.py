@@ -69,10 +69,8 @@ if __name__ == "__main__":
     #excluder_test(["/home/ged/Documents/globtest_dir/link_to_linked_dir/"])
     #excluder_test(["/home/ged/Documents/", "/home/ged/Documents/globtest_dir/"])
     
-#test_and()
-
-    print()
-    exclude_dir_from_os_walk("/home/ged/Documents/testdir", {"innerdir"})
-    print()
-    exclude_dir_from_os_walk("/home/ged/Documents/testdir")
-    print()
+    top_dir = "/home/ged/Documents/testdir"
+    excl_list = ["/home/ged/Documents/testdir/innerdir"]
+    excl_obj = Excluder(top_dir, excl_list)
+    file_dict = sync_functions.create_file_dict_new(top_dir, excl_obj)
+    print(file_dict)

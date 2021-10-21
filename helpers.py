@@ -77,49 +77,70 @@ def format_rsync_output(st_ouput):
 
 class Excluder:
 
-    def __init__(self, exclude_list):
+    def __init__(self, top_dir, exclude_list):
         # TODO maybe reade excludes from file instead of list.
+        # TODO init function needs to add files from list relative to both source
+        # and target. Maybe run twice. Both source and target as parameter?
+        self.top_dir = top_dir
         self.dirs = set()
-        self.files = set()
+        self.excl_dict = {}
+        # __files is only a temporary property deleted by __create_excl_dict
+        self.__files = set()
 
-        for item in exclude_list:        
+        for item in exclude_list:
+            item = os.path.join(top_dir, item)
             if os.path.isfile(item) or os.path.islink(item):
-                self.files.add(item)
+                self.__files.add(item)
                 continue
             elif item.endswith(os.sep) and os.path.isdir(item):
                 if os.path.islink(item[:-1]):
-                    self.files.add(item[:-1])
+                    self.__files.add(item[:-1])
                     continue
-                # TODO add previous dirs path to item paths
                 list1 = os.listdir(item[:-1])
                 iterate_obj = list(map(lambda x : os.path.join(item,x), list1))
             elif os.path.isdir(item):
                 self.dirs.add(item)
+                continue
             else:
                 iterate_obj = glob.iglob(item)
 
             for path in iterate_obj:
                 if os.path.isdir(path):
                     if os.path.islink(path):
-                        self.files.add(path)
+                        self.__files.add(path)
                         continue
                     self.dirs.add(path)
                     continue
-                self.files.add(path)
+                self.__files.add(path)
         
+        self.__dirs_to_relpath()
         self.__create_excl_dict()
         
+    def __dirs_to_relpath(self):
+        rel_dirs = set()
+        for item in self.dirs:
+            rel_dirs.add(os.path.relpath(item, self.top_dir))
+        self.dirs = rel_dirs
+
+        
     def __create_excl_dict(self):
-        self.excl_dict = {}
-        for file_path in self.files:
-            dir_path = os.path.dirname(file_path)
+        for file_path in self.__files:
+            dir_path, file_name = os.path.dirname(file_path), os.path.basename(file_path)
             if not dir_path in self.excl_dict:
                 self.excl_dict[dir_path] = set()
-            self.excl_dict[dir_path].add(file_path)
+            self.excl_dict[dir_path].add(file_name)
+        del self.__files
+        
                 
     def __repr__(self):
-        return f"\nexcl-dirs: {self.dirs}\n\nexcl-files: {self.files}\n\n excl_dict: {self.excl_dict}\n"
-
+        return f"\nexcl-dirs: {self.dirs}\n\nexcl-files: {self.__files}\n\n excl_dict: {self.excl_dict}\n"
+    
+    def get_non_excl_file_set(self, base_dir, file_list):
+        if not base_dir in self.excl_dict:
+            return set(file_list)
+        else:
+            return set(file_list) - self.excl_dict[base_dir]
+        
 
 class Syncer:
     

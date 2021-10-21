@@ -89,6 +89,51 @@ def two_way_sync(pair_id, source, target, delete, dry_run, verbose):
     logger.debug(f"Total time elapsed: {round(time() - start_time, 2)}")
 
 
+def create_file_dict_new(top_directory, excl_obj=None):
+    """Uses os.walk to go through top_directory including subdirectory to
+    create file_dict. 
+    - file_dict uses root directory (path relative
+    to top_directory) as key and has inner_dict as value. 
+
+    Args:
+        top_directory {string}: path to top directory. Can be relative or absolute.
+
+    Returns:
+        file_dict {dictionary}: see above
+    """
+
+    top_directory = os.path.abspath(top_directory)
+    working_dir = os.getcwd()
+    os.chdir(top_directory)
+    file_dict = {}
+    first_dir = True
+
+    for basedir, dirs, files in os.walk(top_directory, topdown=True):
+        if excl_obj and excl_obj.dirs:
+            dirs[:] = [d for d in dirs if d not in excl_obj.dirs]
+
+        if not first_dir:
+            basedir = os.path.relpath(basedir,top_directory)
+        else:
+            basedir = ""
+            first_dir = False
+
+        # Seems this part is needed to copy symlink to dirs
+        # TODO Maybe delete this part? Too much overhead?
+        for a_dir in dirs:
+            rel_file_path = os.path.join(basedir, a_dir)
+            if os.path.islink(rel_file_path):
+                files.append(rel_file_path)
+
+        if excl_obj and excl_obj.excl_dict:
+            file_dict[basedir] = excl_obj.get_non_excl_file_set(basedir, files)
+        else:
+            file_dict[basedir] = set(files)
+
+    os.chdir(working_dir)
+    return file_dict
+
+
 def create_file_dict(top_directory):
     """Uses os.walk to go through top_directory including subdirectory to
     create file_dict. 
