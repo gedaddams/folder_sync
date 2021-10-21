@@ -83,10 +83,21 @@ class Excluder:
         self.files = set()
 
         for item in exclude_list:
-            if item.endswith(os.sep):
-                item = item + "*"
+        
+            if os.path.isfile(item) or os.path.islink(item):
+                self.files.add(item)
+                continue
+            elif item.endswith(os.sep) and os.path.isdir(item):
+                if os.path.islink(item[:-1]):
+                    self.files.add(item[:-1])
+                    continue
+                # TODO add previous dirs path to item paths
+                list1 = os.listdir(item[:-1])
+                iterate_obj = list(map(lambda x : os.path.join(item,x), list1))
+            else:
+                iterate_obj = glob.iglob(item)
 
-            for path in glob.glob(item):
+            for path in iterate_obj:
                 if os.path.isdir(path):
                     if os.path.islink(path):
                         self.files.add(path)

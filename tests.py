@@ -54,7 +54,8 @@ def test_json(top_dir):
     #print(test_from_file)
 
 if __name__ == "__main__":
-    excluder_test(["/home/ged/Documents/testdir/"])
+    #excluder_test(["/home/ged/Documents/globtest_dir/link_to_linked_dir/"])
+    excluder_test(["/home/ged/"])
 
 #    print()
 #    exclude_dir_from_os_walk("/home/ged/Documents/testdir", {"innerdir"})
