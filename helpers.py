@@ -83,6 +83,9 @@ class Excluder:
         self.files = set()
 
         for item in exclude_list:
+            if item.endswith(os.sep):
+                item = item + "*"
+
             for path in glob.glob(item):
                 if os.path.isdir(path):
                     if os.path.islink(path):
