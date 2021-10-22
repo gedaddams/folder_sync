@@ -69,8 +69,24 @@ if __name__ == "__main__":
     #excluder_test(["/home/ged/Documents/globtest_dir/link_to_linked_dir/"])
     #excluder_test(["/home/ged/Documents/", "/home/ged/Documents/globtest_dir/"])
     
-    top_dir = "/home/ged/Documents/testdir"
-    excl_list = ["/home/ged/Documents/testdir/innerdir"]
+#    top_dir = "/home/ged/Documents/testdir"
+    top_dir = "/mnt/d/mina bilder"
+#    excl_list = ["/home/ged/Documents/testdir/innerdir", "leftdir/", "newdir/*.txt"]
+    excl_list = ["Lightroom"]
+    time_point = time()
     excl_obj = Excluder(top_dir, excl_list)
     file_dict = sync_functions.create_file_dict_new(top_dir, excl_obj)
-    print(file_dict)
+    print()
+    print(f"Items in file dict: {len(file_dict)}")
+    print()
+    print(f"Time to complete new incl excludes: {round(time() - time_point, 1)}")
+    print()
+
+    time_point = time()
+
+    file_dict2 = sync_functions.create_file_dict(top_dir)
+    print()
+    print(f"Items in file dict: {len(file_dict2)}")
+    print()
+    print(f"Time to complete old file dict without excl: {round(time() - time_point, 1)}")
+    print()

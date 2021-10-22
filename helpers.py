@@ -95,16 +95,15 @@ class Excluder:
             elif item.endswith(os.sep) and os.path.isdir(item):
                 if os.path.islink(item[:-1]):
                     self.__files.add(item[:-1])
-                    continue
-                list1 = os.listdir(item[:-1])
-                iterate_obj = list(map(lambda x : os.path.join(item,x), list1))
+                else:
+                    rel_dir_path = self.__get_dir_relpath(item[:-1])
+                    self.__add_all_exclude_dir_to_excl_dict(rel_dir_path)
+                continue
             elif os.path.isdir(item):
                 self.dirs.add(item)
                 continue
-            else:
-                iterate_obj = glob.iglob(item)
 
-            for path in iterate_obj:
+            for path in glob.iglob(item):
                 if os.path.isdir(path):
                     if os.path.islink(path):
                         self.__files.add(path)
@@ -114,23 +113,33 @@ class Excluder:
                 self.__files.add(path)
         
         self.__dirs_to_relpath()
-        self.__create_excl_dict()
-        
+        self.__convert__files_to_excl_dict_items()
+
+    def __get_dir_relpath(self, dir_path):
+        if os.path.isabs(dir_path):
+            return os.path.relpath(dir_path, self.top_dir)
+        return dir_path
+    
     def __dirs_to_relpath(self):
         rel_dirs = set()
         for item in self.dirs:
-            rel_dirs.add(os.path.relpath(item, self.top_dir))
+            rel_dirs.add(self.__get_dir_relpath(item))
         self.dirs = rel_dirs
 
+    def __add_all_exclude_dir_to_excl_dict(self, dir_path):
+        self.excl_dict[dir_path] = "exclude-all-files"
+
+    def __add_excl_dict_item_from_filepath(self, file_path):
+        dir_path, file_name = os.path.dirname(file_path), os.path.basename(file_path)
+        dir_path = self.__get_dir_relpath(dir_path)
+        if not dir_path in self.excl_dict:
+            self.excl_dict[dir_path] = set()
+        self.excl_dict[dir_path].add(file_name)
         
-    def __create_excl_dict(self):
+    def __convert__files_to_excl_dict_items(self):
         for file_path in self.__files:
-            dir_path, file_name = os.path.dirname(file_path), os.path.basename(file_path)
-            if not dir_path in self.excl_dict:
-                self.excl_dict[dir_path] = set()
-            self.excl_dict[dir_path].add(file_name)
+            self.__add_excl_dict_item_from_filepath(file_path)
         del self.__files
-        
                 
     def __repr__(self):
         return f"\nexcl-dirs: {self.dirs}\n\nexcl-files: {self.__files}\n\n excl_dict: {self.excl_dict}\n"
@@ -138,8 +147,12 @@ class Excluder:
     def get_non_excl_file_set(self, base_dir, file_list):
         if not base_dir in self.excl_dict:
             return set(file_list)
-        else:
+        elif not self.excl_dict[base_dir]:
+            return set(file_list)
+        elif isinstance(self.excl_dict[base_dir], set):
             return set(file_list) - self.excl_dict[base_dir]
+        else:
+            return None
         
 
 class Syncer:

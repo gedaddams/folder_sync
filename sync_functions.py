@@ -129,6 +129,9 @@ def create_file_dict_new(top_directory, excl_obj=None):
             file_dict[basedir] = excl_obj.get_non_excl_file_set(basedir, files)
         else:
             file_dict[basedir] = set(files)
+        
+        if not file_dict[basedir]: # No point in storing empty sets!
+            file_dict[basedir] = None
 
     os.chdir(working_dir)
     return file_dict
