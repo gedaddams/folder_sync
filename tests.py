@@ -1,6 +1,7 @@
 import sync_functions
 import json
 import os
+import sys
 from helpers import Excluder
 from time import time
 
@@ -72,18 +73,20 @@ def test_old_create_file_dict_no_excludes(top_dir):
     print()
     print(f"Time to complete old file dict without excl: {round(time() - time_point, 1)}")
     print()
+    print(f"Size of old file_dict: {sys.getsizeof(file_dict2)}")
 
 def test_new_create_file_dict_with_excludes(top_dir):
     time_point = time()
-    #excl_list = ["/home/ged/Documents/testdir/innerdir", "leftdir/", "newdir/*.txt"]
-    #excl_list = ["Lightroom", "_SYNCAPP"]
-    excl_list = ["Bogusdir"]
+    #excl_list = ["Lightroom", "_SYNCAPP", "Egna bilder/Kamerabilder/_SYNCAPP", "*.txt"]
+    excl_list = ["bogusdir", "bogus*.txt"]
     excl_obj = Excluder(top_dir, excl_list)
     file_dict = sync_functions.create_file_dict_new(top_dir, excl_obj)
     print()
     print(f"Items in file dict: {len(file_dict)}")
     print()
     print(f"Time to complete new incl excludes: {round(time() - time_point, 1)}")
+    print()
+    print(f"Size of new file_dict: {sys.getsizeof(file_dict)}")
     print()
 
 if __name__ == "__main__":

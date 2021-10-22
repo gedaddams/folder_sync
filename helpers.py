@@ -127,7 +127,7 @@ class Excluder:
         self.dirs = rel_dirs
 
     def __add_all_exclude_dir_to_excl_dict(self, dir_path):
-        self.excl_dict[dir_path] = "exclude-all-files"
+        self.excl_dict[dir_path] = "exclude-all"
 
     def __add_excl_dict_item_from_filepath(self, file_path):
         dir_path, file_name = os.path.dirname(file_path), os.path.basename(file_path)
