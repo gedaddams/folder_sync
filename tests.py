@@ -77,8 +77,8 @@ def test_old_create_file_dict_no_excludes(top_dir):
 
 def test_new_create_file_dict_with_excludes(top_dir):
     time_point = time()
-    #excl_list = ["Lightroom", "_SYNCAPP", "Egna bilder/Kamerabilder/_SYNCAPP", "*.txt"]
-    excl_list = ["bogusdir", "bogus*.txt"]
+    excl_list = ["Lightroom/", "_SYNCAPP/", "Egna bilder/Kamerabilder/_SYNCAPP", "*.txt"]
+    #excl_list = ["bogusdir", "bogus*.txt"]
     excl_obj = Excluder(top_dir, excl_list)
     file_dict = sync_functions.create_file_dict_new(top_dir, excl_obj)
     print()

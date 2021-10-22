@@ -83,26 +83,16 @@ class Excluder:
         # and target. Maybe run twice. Both source and target as parameter?
         self.top_dir = top_dir
         self.dirs = set()
+        self.patterns = set()
         self.excl_dict = {}
         # __files is only a temporary property deleted by __create_excl_dict
         self.__files = set()
 
         for item in exclude_list:
-            item = os.path.join(top_dir, item)
-            if os.path.isfile(item) or os.path.islink(item):
-                self.__files.add(item)
-                continue
-            elif item.endswith(os.sep) and os.path.isdir(item):
-                if os.path.islink(item[:-1]):
-                    self.__files.add(item[:-1])
-                else:
-                    rel_dir_path = self.__get_dir_relpath(item[:-1])
-                    self.__add_all_exclude_dir_to_excl_dict(rel_dir_path)
-                continue
-            elif os.path.isdir(item):
-                self.dirs.add(item)
+            if self.__add_item(item):
                 continue
 
+            # TODO do not expand here. Add to self.patterns instead and try expanding in each dir.
             for path in glob.iglob(item):
                 if os.path.isdir(path):
                     if os.path.islink(path):
@@ -114,6 +104,30 @@ class Excluder:
         
         self.__dirs_to_relpath()
         self.__convert__files_to_excl_dict_items()
+
+    def __add_item(self, item):
+        """
+        Args:
+            item {string}: Possibly path to item.
+
+        Returns:
+            {boolean}: Returns True if item is file, dir or link otherwise False.
+        """
+
+        item = os.path.join(self.top_dir, item)
+        if os.path.isfile(item) or os.path.islink(item):
+            self.__files.add(item)
+            return True
+        elif item.endswith(os.sep) and os.path.isdir(item):
+            if os.path.islink(item[:-1]):
+                self.__files.add(item[:-1])
+            else:
+                rel_dir_path = self.__get_dir_relpath(item[:-1])
+                self.__add_all_exclude_dir_to_excl_dict(rel_dir_path)
+            return True
+        elif os.path.isdir(item):
+            self.dirs.add(item)
+        return False
 
     def __get_dir_relpath(self, dir_path):
         if os.path.isabs(dir_path):
@@ -139,7 +153,7 @@ class Excluder:
     def __convert__files_to_excl_dict_items(self):
         for file_path in self.__files:
             self.__add_excl_dict_item_from_filepath(file_path)
-        del self.__files
+        self.__files = set()
                 
     def __repr__(self):
         return f"\nexcl-dirs: {self.dirs}\n\nexcl-files: {self.__files}\n\n excl_dict: {self.excl_dict}\n"
