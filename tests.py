@@ -2,6 +2,7 @@ import sync_functions
 import json
 import os
 import sys
+import pathlib
 from helpers import Excluder
 from time import time
 
@@ -19,11 +20,9 @@ def exclude_dir_from_os_walk(top_dir, exclude_set=None):
         print(root)
         print(files)
 
-
 def excluder_test(excl_list):
     excl_obj = Excluder(excl_list)
     print(excl_obj)
-
 
 def test_get_existing_items_no_delete_objects():
     source = "/home/ged/Documents/testdir/"
@@ -65,30 +64,39 @@ def test_and():
     if its_false() and its_true():
         pass
 
+def pathlib_create_file_dict(top_dir):
+    wd = pathlib.Path.cwd()
+    os.chdir(top_dir)
+    try:
+        path = pathlib.Path(".")
+        item_list = list(path.glob("**/*"))
+        item_dict = {}
+        for item in item_list:
+            basedir = str(item.parent)
+            name = item.name
+            if not basedir in item_dict:
+                item_dict[basedir] = set()
+            item_dict[basedir].add(name)
+    finally:
+        os.chdir(wd)
+        return item_dict
+
 def test_old_create_file_dict_no_excludes(top_dir):
-    time_point = time()
-    file_dict2 = sync_functions.create_file_dict(top_dir)
-    print()
-    print(f"Items in file dict: {len(file_dict2)}")
-    print()
-    print(f"Time to complete old file dict without excl: {round(time() - time_point, 1)}")
-    print()
-    print(f"Size of old file_dict: {sys.getsizeof(file_dict2)}")
+    return sync_functions.create_file_dict(top_dir)
 
 def test_new_create_file_dict_with_excludes(top_dir):
     time_point = time()
     excl_list = ["Lightroom/", "_SYNCAPP/", "Egna bilder/Kamerabilder/_SYNCAPP", "*.txt"]
-    #excl_list = ["bogusdir", "bogus*.txt"]
     excl_obj = Excluder(top_dir, excl_list)
     file_dict = sync_functions.create_file_dict_new(top_dir, excl_obj)
-    print()
-    print(f"Items in file dict: {len(file_dict)}")
-    print()
-    print(f"Time to complete new incl excludes: {round(time() - time_point, 1)}")
-    print()
-    print(f"Size of new file_dict: {sys.getsizeof(file_dict)}")
-    print()
 
 if __name__ == "__main__":
-    test_new_create_file_dict_with_excludes("/mnt/d/mina bilder")
-    test_old_create_file_dict_no_excludes("/mnt/d/mina bilder")
+    time_point = time()
+    dict1 = pathlib_create_file_dict("/mnt/d/mina bilder")
+    print(f"Time for pathlib create dict: {round(time() - time_point, 1)}")
+    print(len(dict1))
+    #test_new_create_file_dict_with_excludes("/mnt/d/mina bilder")
+    time_point = time()
+    dict2 = test_old_create_file_dict_no_excludes("/mnt/d/mina bilder")
+    print(f"Time for old create dict: {round(time() - time_point, 1)}")
+    print(len(dict2))
