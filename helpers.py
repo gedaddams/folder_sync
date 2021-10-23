@@ -89,61 +89,47 @@ class Excluder:
         self.__files = set()
 
         for item in exclude_list:
-
-            p = pathlib.Path(item)
-            if p.is_absolute():
-                if self.top_dir in p.parents:
-                    path = str(p.relative_to(self.top_dir))
-                else:
-                    logger.error("Paths in exclude list need to relative to top folders!")
+                path = pathlib.Path(item)
+                if self.__add_item(path):
                     continue
-            else:
-                path = str(p)
-
-            if self.__add_item(path):
-                continue
-            
-            self.__glob_item(path)
+                    
+                self.__glob_item(item)
         
         self.__convert__files_to_excl_dict_items()
 
     def __glob_item(self, item):
         try:
             for path in self.top_dir.glob(item):
-                self.__add_item(str(path))
+                self.__add_item(path)
         except Exception as error:
             logger.error(error)
 
-    def __add_item(self, item):
+    def __add_item(self, path):
         """
         Args: 
         item {string}: Possibly path to item.
         
         Return {boolean}: True if matching item (link, file, dir) otherwise False
         """
+        try:
+            if not path.is_absolute():
+                path = self.top_dir / path
 
-        if os.path.isfile(item) or os.path.islink(item):
-            self.__files.add(item)
-        elif item.endswith(os.sep) and os.path.isdir(item):
-            if os.path.islink(item[:-1]):
-                self.__files.add(item[:-1])
+            if path.is_file() or path.is_symlink():
+                self.__files.add(str(path.relative_to(self.top_dir)))
+            elif path.is_dir():
+                self.dirs.add(str(path.relative_to(self.top_dir)))
             else:
-                self.__add_all_exclude_dir_to_excl_dict(item[:-1])
-        elif os.path.isdir(item):
-            self.dirs.add(item)
-        else:
+                return False
+            return True
+        except:
             return False
-        return True
-
-    def __add_all_exclude_dir_to_excl_dict(self, dir_path):
-        self.excl_dict[dir_path] = "exclude-all"
+            
 
     def __add_excl_dict_item_from_filepath(self, file_path):
         dir_path, file_name = os.path.dirname(file_path), os.path.basename(file_path)
         if not dir_path in self.excl_dict:
             self.excl_dict[dir_path] = set()
-        elif self.excl_dict[dir_path] == "exclude-all":
-            return
         self.excl_dict[dir_path].add(file_name)
         
     def __convert__files_to_excl_dict_items(self):
