@@ -1,6 +1,9 @@
 ﻿folder_sync TODO
 
     - Maybe shorten and optimize get_existing_items. Function also needs more testing.
+    - Rewrite code to only work with absolute paths to avoid needing to change working directory.
+    Only use relative paths in sync files (to work with rsync) and exclude files (for consistency).
+    - Rewrite code to use pathlib instead of os
     - Make deletions work over ssh
     - Add safe_mode as default mode where you always first do a dry run and if you accept output then do real sync.
     - Change Excluder, create_file_dict etc to work with file_names instead of relative file paths. Only create file_paths when needed.

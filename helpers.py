@@ -1,9 +1,11 @@
 """This module contains classes and function format_rsync_output"""
 import os
+import pathlib
 import subprocess
-import glob
+import logging
 from shutil import rmtree
 
+logger = logging.getLogger(__name__)
 
 def format_rsync_output(st_ouput):
     # This formating function will only work reliable if not using -v or -P for rsync call.
@@ -77,96 +79,61 @@ def format_rsync_output(st_ouput):
 
 class Excluder:
 
-    def __init__(self, top_dir, exclude_list, exclude_patterns):
+    def __init__(self, top_dir, exclude_list):
         # TODO maybe reade excludes from file instead of list.
-        # TODO init function needs to add files from list relative to both source
-        # and target. Maybe run twice. Both source and target as parameter?
-        self.top_dir = top_dir
+        self.top_dir = os.path.abspath(top_dir)
         self.dirs = set()
-        self.temp_dirs = set()
-        self.patterns = {}
         self.excl_dict = {}
-        self.temp_dict = {}
+
         # __files is only  used temporarily. excl_dict and dirs is used after setup.
         self.__files = set()
 
         for item in exclude_list:
-            self.__add_item(item)
-        
-        for pattern in exclude_patterns:
-            self.__add_pattern(pattern)
+            if self.__add_item(os.path.join(self.top_dir, item)):
+                continue
             
-            # TODO do not expand here. Add to self.patterns instead and try expanding in each dir.
-            for path in glob.iglob(item):
-                if os.path.isdir(path):
-                    if os.path.islink(path):
-                        self.__files.add(path)
-                        continue
-                    self.dirs.add(path)
-                    continue
-                self.__files.add(path)
+            self.__glob_item(item)
         
-        self.__dirs_to_relpath()
         self.__convert__files_to_excl_dict_items()
 
-    def __add_pattern(self, pattern):
-        """Adds pattern either for a directory (and all subdirs) or for all dirs.
-        Patterns are added to the patterns property. This is later used by the
-        method expand_pattern.
-
-        Args:
-            pattern {string}: pattern representing a glob patterns.
-        """
-        dir_path, file_pattern = os.path.dirname(pattern), os.path.basename(pattern)
-        if dir_path:
-            abs_dir = os.path.join(self.top_dir, dir_path)
-            if os.path.isdir(abs_dir):
-                dir_path = os.path.relpath(abs_dir, self.top_dir)
-                self.patterns[dir_path] = file_pattern
-        else:
-            self.patterns["all"] = file_pattern
-
-    def expand_pattern(self, basedir):
-        # TODO
-        pass
+    def __glob_item(self, item):
+        try:
+            p = pathlib.Path(self.top_dir)
+            for path in p.glob(item):
+                self.__add_item(str(path))
+        except Exception as error:
+            logger.error(error)
 
     def __add_item(self, item):
         """
         Args: 
         item {string}: Possibly path to item.
+        
+        Return {boolean}: True if matching item (link, file, dir) otherwise False
         """
 
-        item = os.path.join(self.top_dir, item)
         if os.path.isfile(item) or os.path.islink(item):
             self.__files.add(item)
         elif item.endswith(os.sep) and os.path.isdir(item):
             if os.path.islink(item[:-1]):
                 self.__files.add(item[:-1])
             else:
-                rel_dir_path = self.__get_dir_relpath(item[:-1])
-                self.__add_all_exclude_dir_to_excl_dict(rel_dir_path)
+                self.__add_all_exclude_dir_to_excl_dict(item[:-1])
         elif os.path.isdir(item):
             self.dirs.add(item)
-
-    def __get_dir_relpath(self, dir_path):
-        if os.path.isabs(dir_path):
-            return os.path.relpath(dir_path, self.top_dir)
-        return dir_path
-    
-    def __dirs_to_relpath(self):
-        rel_dirs = set()
-        for item in self.dirs:
-            rel_dirs.add(self.__get_dir_relpath(item))
-        self.dirs = rel_dirs
+        else:
+            return False
+        return True
 
     def __add_all_exclude_dir_to_excl_dict(self, dir_path):
         self.excl_dict[dir_path] = "exclude-all"
 
     def __add_excl_dict_item_from_filepath(self, file_path):
         dir_path, file_name = os.path.dirname(file_path), os.path.basename(file_path)
-        dir_path = self.__get_dir_relpath(dir_path)
         if not dir_path in self.excl_dict:
             self.excl_dict[dir_path] = set()
+        elif self.excl_dict[dir_path] == "exclude-all":
+            return
         self.excl_dict[dir_path].add(file_name)
         
     def __convert__files_to_excl_dict_items(self):
@@ -175,7 +142,7 @@ class Excluder:
         self.__files = set()
                 
     def __repr__(self):
-        return f"\nexcl-dirs: {self.dirs}\n\nexcl-files: {self.__files}\n\n excl_dict: {self.excl_dict}\n"
+        return f"\nexcl-dirs: {self.dirs}\n\nexcl_dict: {self.excl_dict}\n"
     
     def get_non_excl_file_set(self, base_dir, file_list):
         if not base_dir in self.excl_dict:

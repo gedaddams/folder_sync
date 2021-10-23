@@ -129,4 +129,6 @@ def compare_create_dict_funcs():
             print(f"Only in old_dict {key_value}: {item}")
 
 if __name__ == "__main__":
-    compare_create_dict_funcs()
+    excl_list = ["**/*.txt", "innerdir", "newdir/", "another_dir/sneaky_dir/sneaky_file", "file1"]
+    excl_obj = Excluder("/home/ged/Documents/testdir", excl_list)
+    print(excl_obj)
