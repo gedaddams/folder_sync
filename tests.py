@@ -69,10 +69,12 @@ def pathlib_create_file_dict(top_dir):
     os.chdir(top_dir)
     try:
         path = pathlib.Path(".")
-        item_list = list(path.glob("**/*"))
+        #item_list = list(path.glob("**/*"))
         item_dict = {}
-        for item in item_list:
+        for item in path.glob("**/*"):
             basedir = str(item.parent)
+            if basedir == ".":
+                basedir = ""
             name = item.name
             if not basedir in item_dict:
                 item_dict[basedir] = set()
@@ -91,12 +93,17 @@ def test_new_create_file_dict_with_excludes(top_dir):
     file_dict = sync_functions.create_file_dict_new(top_dir, excl_obj)
 
 if __name__ == "__main__":
+    test_dir = "/home/ged"
     time_point = time()
-    dict1 = pathlib_create_file_dict("/mnt/d/mina bilder")
+    dict1 = pathlib_create_file_dict(test_dir)
     print(f"Time for pathlib create dict: {round(time() - time_point, 1)}")
     print(len(dict1))
     #test_new_create_file_dict_with_excludes("/mnt/d/mina bilder")
     time_point = time()
-    dict2 = test_old_create_file_dict_no_excludes("/mnt/d/mina bilder")
+    dict2 = test_old_create_file_dict_no_excludes(test_dir)
     print(f"Time for old create dict: {round(time() - time_point, 1)}")
     print(len(dict2))
+    
+    diff_set = set(dict1.keys()) ^ set(dict2.keys())
+    print(len(diff_set))
+
