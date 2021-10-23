@@ -116,6 +116,13 @@ def create_file_dict_new(top_directory, excl_obj=None):
             basedir = ""
             first_dir = False
 
+        # Seems this part is needed to copy symlink to dirs
+        # TODO Maybe delete this part? Too much overhead?
+        for a_dir in dirs:
+            rel_file_path = os.path.join(basedir, a_dir)
+            if os.path.islink(rel_file_path):
+                files.append(a_dir)
+
         if excl_obj and excl_obj.excl_dict:
             file_dict[basedir] = excl_obj.get_non_excl_file_set(basedir, files)
             if file_dict[basedir] == None: # Means to exclude all was provided.
@@ -131,12 +138,6 @@ def create_file_dict_new(top_directory, excl_obj=None):
             # Keeps os.walk from going into excluded dirs!
             dirs[:] = [d for d in dirs if os.path.join(basedir, d) not in excl_obj.dirs]
 
-        # Seems this part is needed to copy symlink to dirs
-        # TODO Maybe delete this part? Too much overhead?
-        for a_dir in dirs:
-            rel_file_path = os.path.join(basedir, a_dir)
-            if os.path.islink(rel_file_path):
-                files.append(rel_file_path)
 
     os.chdir(working_dir)
     return file_dict

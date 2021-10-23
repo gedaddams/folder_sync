@@ -68,17 +68,25 @@ def pathlib_create_file_dict(top_dir):
     wd = pathlib.Path.cwd()
     os.chdir(top_dir)
     try:
-        path = pathlib.Path(".")
+        path = pathlib.Path()
         #item_list = list(path.glob("**/*"))
         item_dict = {}
         for item in path.glob("**/*"):
-            basedir = str(item.parent)
-            if basedir == ".":
-                basedir = ""
-            name = item.name
-            if not basedir in item_dict:
-                item_dict[basedir] = set()
-            item_dict[basedir].add(name)
+            if item.is_dir() and not item.is_symlink():
+                item_path = str(item)
+                # TODO unsure wether this if is needed. TEST IT.
+                if item_path.endswith(os.sep):
+                    item_path = item_path[:-1]
+                if not item_path in item_dict:
+                    item_dict[item_path] = set() 
+            else:
+                basedir = str(item.parent)
+                if basedir == ".":
+                    basedir = ""
+                name = item.name
+                if not basedir in item_dict:
+                    item_dict[basedir] = set()
+                item_dict[basedir].add(name)
     finally:
         os.chdir(wd)
         return item_dict
@@ -92,18 +100,33 @@ def test_new_create_file_dict_with_excludes(top_dir):
     excl_obj = Excluder(top_dir, excl_list)
     file_dict = sync_functions.create_file_dict_new(top_dir, excl_obj)
 
-if __name__ == "__main__":
-    test_dir = "/home/ged"
+def compare_create_dict_funcs():
+    test_dir = "/share/media/Mina bilder"
+    #test_dir = "/mnt/d/mina bilder"
+    #test_dir = "/home/ged/Documents/"
     time_point = time()
     dict1 = pathlib_create_file_dict(test_dir)
     print(f"Time for pathlib create dict: {round(time() - time_point, 1)}")
     print(len(dict1))
-    #test_new_create_file_dict_with_excludes("/mnt/d/mina bilder")
     time_point = time()
-    dict2 = test_old_create_file_dict_no_excludes(test_dir)
+    dict2 = sync_functions.create_file_dict_new(test_dir)
     print(f"Time for old create dict: {round(time() - time_point, 1)}")
     print(len(dict2))
     
-    diff_set = set(dict1.keys()) ^ set(dict2.keys())
-    print(len(diff_set))
+    diff_set = dict1.keys() ^ dict2.keys()
+    common_set = dict1.keys() & dict2.keys()
+    for key_value in diff_set:
+        print(f"Diff key value: {key_value}")
+        
+    for key_value in common_set:
+        dict1_set = set() if dict1[key_value] == None else dict1[key_value]
+        dict2_set = set() if dict2[key_value] == None else dict2[key_value]
+        dict1_only = dict1_set - dict2_set
+        dict2_only = dict2_set - dict1_set
+        for item in dict1_only:
+            print(f"Only in pathlib_dict {key_value}: {item}")
+        for item in dict2_only:
+            print(f"Only in old_dict {key_value}: {item}")
 
+if __name__ == "__main__":
+    compare_create_dict_funcs()
