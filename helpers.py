@@ -81,7 +81,7 @@ class Excluder:
 
     def __init__(self, top_dir, exclude_list):
         # TODO maybe reade excludes from file instead of list.
-        self.top_dir = os.path.abspath(top_dir)
+        self.top_dir = pathlib.Path(top_dir).absolute()
         self.dirs = set()
         self.excl_dict = {}
 
@@ -89,17 +89,27 @@ class Excluder:
         self.__files = set()
 
         for item in exclude_list:
-            if self.__add_item(os.path.join(self.top_dir, item)):
+
+            p = pathlib.Path(item)
+            if p.is_absolute():
+                if self.top_dir in p.parents:
+                    path = str(p.relative_to(self.top_dir))
+                else:
+                    logger.error("Paths in exclude list need to relative to top folders!")
+                    continue
+            else:
+                path = str(p)
+
+            if self.__add_item(path):
                 continue
             
-            self.__glob_item(item)
+            self.__glob_item(path)
         
         self.__convert__files_to_excl_dict_items()
 
     def __glob_item(self, item):
         try:
-            p = pathlib.Path(self.top_dir)
-            for path in p.glob(item):
+            for path in self.top_dir.glob(item):
                 self.__add_item(str(path))
         except Exception as error:
             logger.error(error)
