@@ -83,7 +83,6 @@ class Excluder:
         script_path = pathlib.Path(__file__).parent.absolute()
         dir_path = script_path / ".folder_sync_config" / "folder_pair_excludes"
         file_path = dir_path / ("folder_pair_" + str(pair_id) + ".txt")
-        print(file_path)
 
         excl_list = []
         try:
@@ -103,17 +102,12 @@ class Excluder:
         self.dirs = set()
         self.excl_dict = {}
 
-        # __files is only  used temporarily. excl_dict and dirs is used after setup.
-        self.__files = set()
-
         for item in exclude_list:
                 path = pathlib.Path(item)
                 if self.__add_item(path):
                     continue
                     
                 self.__glob_item(item)
-        
-        self.__convert__files_to_excl_dict_items()
         
     def __bool__(self):
         return bool(self.dirs) or bool(self.excl_dict) 
@@ -138,27 +132,25 @@ class Excluder:
                 path = self.top_dir / path
 
             if path.is_file() or path.is_symlink():
-                self.__files.add(str(path.relative_to(self.top_dir)))
+                dir_path = str(path.parent.relative_to(self.top_dir))
+                if dir_path == ".":
+                    dir_path = ""
+                    
+                file_name = path.name
+                if not dir_path in self.excl_dict:
+                    self.excl_dict[dir_path] = set()
+                self.excl_dict[dir_path].add(file_name)
+
             elif path.is_dir():
                 self.dirs.add(str(path.relative_to(self.top_dir)))
+
             else:
                 return False
+
             return True
+
         except:
             return False
-            
-
-    def __add_excl_dict_item_from_filepath(self, file_path):
-        path = pathlib.Path(file_path)
-        dir_path, file_name = str(path.parent), path.name
-        if not dir_path in self.excl_dict:
-            self.excl_dict[dir_path] = set()
-        self.excl_dict[dir_path].add(file_name)
-        
-    def __convert__files_to_excl_dict_items(self):
-        for file_path in self.__files:
-            self.__add_excl_dict_item_from_filepath(file_path)
-        self.__files = set()
                 
     def __repr__(self):
         return f"\nexcl-dirs: {self.dirs}\n\nexcl_dict: {self.excl_dict}\n"
