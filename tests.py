@@ -128,6 +128,6 @@ def compare_create_dict_funcs(test_dir):
 
 if __name__ == "__main__":
     #compare_create_dict_funcs("/home/ged/Programmering")
-    test_obj = Excluder.create_excl_obj("/home/ged/Documents", [])
+    test_obj = Excluder.create_excluder("/home/ged/Documents", 2)
     if test_obj:
         print("its true")

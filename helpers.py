@@ -79,9 +79,22 @@ def format_rsync_output(st_ouput):
 
 class Excluder:
     @classmethod
-    def create_excl_obj(cls, top_dir, exclude_list):
-        if exclude_list:
-            return cls(top_dir, exclude_list)
+    def create_excluder(cls, top_dir, pair_id):
+        script_path = pathlib.Path(__file__).parent.absolute()
+        dir_path = script_path / ".folder_sync_config" / "folder_pair_excludes"
+        file_path = dir_path / ("folder_pair_" + str(pair_id) + ".txt")
+        print(file_path)
+
+        excl_list = []
+        try:
+            with file_path.open('r') as excl_file:
+                excl_list = [line.strip() for line in excl_file.readlines()]
+            excl_list = list(filter(lambda row: bool(row), excl_list))
+        except:
+            return None
+
+        if excl_list:
+            return cls(top_dir, excl_list)
         return None
 
     def __init__(self, top_dir, exclude_list):
