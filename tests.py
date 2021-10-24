@@ -96,20 +96,18 @@ def test_old_create_file_dict_no_excludes(top_dir):
 
 def test_new_create_file_dict_with_excludes(top_dir):
     time_point = time()
-    excl_list = ["Lightroom/", "_SYNCAPP/", "Egna bilder/Kamerabilder/_SYNCAPP", "*.txt"]
+    excl_list = ["**/*.txt", "folder_sync"]
     excl_obj = Excluder(top_dir, excl_list)
     file_dict = sync_functions.create_file_dict_new(top_dir, excl_obj)
+    return file_dict
 
-def compare_create_dict_funcs():
-    test_dir = "/share/media/Mina bilder"
-    #test_dir = "/mnt/d/mina bilder"
-    #test_dir = "/home/ged/Documents/"
+def compare_create_dict_funcs(test_dir):
     time_point = time()
     dict1 = pathlib_create_file_dict(test_dir)
     print(f"Time for pathlib create dict: {round(time() - time_point, 1)}")
     print(len(dict1))
     time_point = time()
-    dict2 = sync_functions.create_file_dict_new(test_dir)
+    dict2 = test_new_create_file_dict_with_excludes(test_dir)
     print(f"Time for old create dict: {round(time() - time_point, 1)}")
     print(len(dict2))
     
@@ -129,6 +127,4 @@ def compare_create_dict_funcs():
             print(f"Only in old_dict {key_value}: {item}")
 
 if __name__ == "__main__":
-    excl_list = ["**/*.txt", "innerdir", "/home/ged/Documents/testdir/newdir/", "another_dir/sneaky_dir/sneaky_file", "file1"]
-    excl_obj = Excluder("/home/ged/Documents/testdir", excl_list)
-    print(excl_obj)
+    compare_create_dict_funcs("/home/ged/Programmering")

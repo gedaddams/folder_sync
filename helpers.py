@@ -113,6 +113,7 @@ class Excluder:
         """
         try:
             if not path.is_absolute():
+                # pathlib allows joining of path with / operator
                 path = self.top_dir / path
 
             if path.is_file() or path.is_symlink():
@@ -127,7 +128,8 @@ class Excluder:
             
 
     def __add_excl_dict_item_from_filepath(self, file_path):
-        dir_path, file_name = os.path.dirname(file_path), os.path.basename(file_path)
+        path = pathlib.Path(file_path)
+        dir_path, file_name = str(path.parent), path.name
         if not dir_path in self.excl_dict:
             self.excl_dict[dir_path] = set()
         self.excl_dict[dir_path].add(file_name)
