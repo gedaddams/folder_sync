@@ -8,9 +8,6 @@ arglist = ["vim", file_path]
 obj_return = subprocess.run(arglist)
 print(obj_return.returncode)
 
-#arg_string = f"vim {file_path}"
-#os.system(f"vim {file_path}")
-
 with file_path.open("r") as f:
     text = [line.split(maxsplit=1) for line in f.readlines()]
 
