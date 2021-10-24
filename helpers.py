@@ -101,6 +101,9 @@ class Excluder:
                 self.__glob_item(item)
         
         self.__convert__files_to_excl_dict_items()
+        
+    def __bool__(self):
+        return bool(self.dirs) or bool(self.excl_dict) 
 
     def __glob_item(self, item):
         try:
