@@ -78,6 +78,11 @@ def format_rsync_output(st_ouput):
 
 
 class Excluder:
+    @classmethod
+    def create_excl_obj(cls, top_dir, exclude_list):
+        if exclude_list:
+            return cls(top_dir, exclude_list)
+        return None
 
     def __init__(self, top_dir, exclude_list):
         # TODO maybe reade excludes from file instead of list.

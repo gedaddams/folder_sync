@@ -127,4 +127,6 @@ def compare_create_dict_funcs(test_dir):
             print(f"Only in old_dict {key_value}: {item}")
 
 if __name__ == "__main__":
-    compare_create_dict_funcs("/home/ged/Programmering")
+    #compare_create_dict_funcs("/home/ged/Programmering")
+    test_obj = Excluder.create_excl_obj("/home/ged/Documents", ["hejsan"])
+    print(test_obj)
