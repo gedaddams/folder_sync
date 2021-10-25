@@ -161,7 +161,6 @@ class Excluder:
         return set(file_list)
 
         
-
 class Syncer:
     
     def __init__(self, src_root, tar_root) -> None:
