@@ -5,7 +5,8 @@ import subprocess
 import logging
 from shutil import rmtree
 
-logger = logging.getLogger(__name__)
+LOGGER = logging.getLogger(__name__)
+SCRIPT_PATH = pathlib.Path(__file__).parent.absolute()
 
 def format_rsync_output(st_ouput):
     # This formating function will only work reliable if not using -v or -P for rsync call.
@@ -80,8 +81,7 @@ def format_rsync_output(st_ouput):
 class Excluder:
     @classmethod
     def create_excluder(cls, top_dir, pair_id):
-        script_path = pathlib.Path(__file__).parent.absolute()
-        dir_path = script_path / ".folder_sync_config" / "folder_pair_excludes"
+        dir_path = SCRIPT_PATH / ".folder_sync_config" / "folder_pair_excludes"
         file_path = dir_path / ("folder_pair_" + str(pair_id) + ".txt")
 
         excl_list = []
@@ -117,7 +117,7 @@ class Excluder:
             for path in self.top_dir.glob(item):
                 self.__add_item(path)
         except Exception as error:
-            logger.error(error)
+            LOGGER.error(error)
 
     def __add_item(self, path):
         """
@@ -156,21 +156,20 @@ class Excluder:
         return f"\nexcl-dirs: {self.dirs}\n\nexcl_dict: {self.excl_dict}\n"
     
     def get_non_excl_file_set(self, base_dir, file_list):
-        if not base_dir in self.excl_dict:
-            return set(file_list)
-        elif not self.excl_dict[base_dir]:
-            return set(file_list)
-        elif isinstance(self.excl_dict[base_dir], set):
-            return set(file_list) - self.excl_dict[base_dir]
-        else:
-            return None
+        if self.excl_dict.get(base_dir, None):
+            return set(file_list) - self.excl_dict.get(base_dir, set())
+        return set(file_list)
+
         
 
 class Syncer:
     
     def __init__(self, src_root, tar_root) -> None:
-        # lr = left-to-right rl = right-to-left
-        # src = source, tar = target
+        # lr = left-to-right
+        # rl = right-to-left
+        # src = source
+        # tar = target
+        
         self.src_root = src_root
         self.tar_root = tar_root
         self.lr_items = set()
@@ -181,15 +180,14 @@ class Syncer:
         
     def __create_textfiles(self):
         # Private method to create textfiles necessary for rsync call.
-        script_dir = os.path.dirname(os.path.realpath(__file__))
-        config_dir = os.path.join("./folder_sync_config", script_dir)
+        config_dir = SCRIPT_PATH / "./folder_sync_config"
 
-        self.__txtfile_lr_path = os.path.join(config_dir, "lr_sync.tmp")
-        with open(self.__txtfile_lr_path, 'w') as file_lr:
+        self.__txtfile_lr_path = config_dir / "lr_sync.tmp"
+        with self.__txtfile_lr_path.open('w') as file_lr:
             file_lr.writelines([line + '\n' for line in self.lr_items])
 
-        self.__txtfile_rl_path = os.path.join(script_dir, "rl_sync.tmp")
-        with open(self.__txtfile_rl_path, 'w') as file_rl:
+        self.__txtfile_rl_path = config_dir / "rl_sync.tmp"
+        with self.__txtfile_rl_path.open('w') as file_rl:
             file_rl.writelines([line + '\n' for line in self.rl_items])
         
     def __delete_textfiles(self):

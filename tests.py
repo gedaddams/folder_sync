@@ -101,16 +101,7 @@ def test_new_create_file_dict_with_excludes(top_dir):
     file_dict = sync_functions.create_file_dict_new(top_dir, excl_obj)
     return file_dict
 
-def compare_create_dict_funcs(test_dir):
-    time_point = time()
-    dict1 = pathlib_create_file_dict(test_dir)
-    print(f"Time for pathlib create dict: {round(time() - time_point, 1)}")
-    print(len(dict1))
-    time_point = time()
-    dict2 = test_new_create_file_dict_with_excludes(test_dir)
-    print(f"Time for old create dict: {round(time() - time_point, 1)}")
-    print(len(dict2))
-    
+def compare_dicts(dict1, dict2):
     diff_set = dict1.keys() ^ dict2.keys()
     common_set = dict1.keys() & dict2.keys()
     for key_value in diff_set:
@@ -122,9 +113,23 @@ def compare_create_dict_funcs(test_dir):
         dict1_only = dict1_set - dict2_set
         dict2_only = dict2_set - dict1_set
         for item in dict1_only:
-            print(f"Only in pathlib_dict {key_value}: {item}")
+            print(f"Only in dict1 {key_value}: {item}")
         for item in dict2_only:
-            print(f"Only in old_dict {key_value}: {item}")
+            print(f"Only in dict2 {key_value}: {item}")
+    
+    print("\nCOMPARE_DICTS FINISHED!\n")
+
+def compare_create_dict_funcs(test_dir):
+    time_point = time()
+    dict1 = pathlib_create_file_dict(test_dir)
+    print(f"Time for pathlib create dict: {round(time() - time_point, 1)}")
+    print(len(dict1))
+    time_point = time()
+    dict2 = test_new_create_file_dict_with_excludes(test_dir)
+    print(f"Time for old create dict: {round(time() - time_point, 1)}")
+    print(len(dict2))
+    
+    compare_dicts(dict1, dict2)
 
 if __name__ == "__main__":
     #compare_create_dict_funcs("/home/ged/Programmering")

@@ -80,16 +80,27 @@ def get_folder_pair_id(cur, source, target):
     AND target = ?;
     """
 
-    cur.execute(sql, (source, target))
-    folder_pairs = cur.fetchall()
-    len_rows = len(folder_pairs)
-    
-    assert (len_rows < 2), (f"\nfolder_pair_exists returned to many folder pairs: {folder_pairs}\n")
-    if len_rows == 1:
-        id_folder_pair = folder_pairs[0][0]
-        return id_folder_pair
+    def run_sql(src, tar):
+        cur.execute(sql, (src, tar))
+        folder_pairs = cur.fetchall()
+        len_rows = len(folder_pairs)
+        
+        assert (len_rows < 2), (f"\nfolder_pair_exists returned to many folder pairs: {folder_pairs}\n")
+        if len_rows == 1:
+            id_folder_pair = folder_pairs[0][0]
+            return id_folder_pair
+        
+        return 0
 
-    return 0
+    match_found = run_sql(source, target)
+    if match_found:
+        return match_found
+    else:
+        return run_sql(target, source)
+        
+
+    
+
 
 
 def add_folder_pair(cur, source, target):

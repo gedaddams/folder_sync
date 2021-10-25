@@ -6,6 +6,5 @@
     - Rewrite code to use pathlib instead of os
     - Make deletions work over ssh
     - Add safe_mode as default mode where you always first do a dry run and if you accept output then do real sync.
-    - Change Excluder, create_file_dict etc to work with file_names instead of relative file paths. Only create file_paths when needed.
-    Ex when comparing modification dates and writing to file used by rsync. Sync object should probably contain file_paths since they
-    write them to file.
+    - Avoid changing working directory at all. Right now this happens in create_file_dict. Change it.
+    - create_sync_objects should be rewritten and incorporated in Syncer class

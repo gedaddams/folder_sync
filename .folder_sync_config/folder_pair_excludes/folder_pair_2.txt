@@ -2,5 +2,6 @@ test
 testing
 testdir
 hejsan
- **/*.txt
- **/*.odt
+**/*.txt
+**/*.odt
+Dropbox/.dropbox.cache/*
