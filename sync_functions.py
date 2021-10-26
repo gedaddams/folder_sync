@@ -1,6 +1,6 @@
 from time import time
 from helpers import *
-from db_helpers import save_folder_state, get_json_filepath
+from db_helpers import save_folder_state
 import os
 import subprocess
 import logging
@@ -26,6 +26,8 @@ def two_way_sync(pair_id, source, target, delete, dry_run, verbose):
 
     LOGGER.debug(f"Time for create_file_dicts {round(time() - time_point, 2)}")
     time_point = time()
+    
+    sync_obj = Syncer(pair_id, source, target, source_files, target_files)
     
     # TODO Remove only for testing
     return

@@ -3,7 +3,9 @@ import os
 import pathlib
 import subprocess
 import logging
+import json
 from shutil import rmtree
+from db_helpers import get_json_path
 
 LOGGER = logging.getLogger(__name__)
 SCRIPT_PATH = pathlib.Path(__file__).parent.absolute()
@@ -160,8 +162,165 @@ class Excluder:
             return set(file_list) - self.excl_dict.get(base_dir, set())
         return set(file_list)
 
-        
+
+class Sync_item:
+    """
+    Summary:
+        Each instance of a Sync_item represents a file or a dir.
+
+    Properties:
+        self.name {string} = Name of file or dir
+        self.action {int} = Corresponds to desired sync action in __ACTION_DICT
+
+    Methods:
+        Mostly self explanatory. 
+        __lt__ is included to add sort capability when instance is in list.
+    """
+    ACTION_DICT = {
+    0: "UNDECIDED",
+    1: "IGNORE",
+    2: "ADD",
+    3: "DELETE",
+    4: "UPDATE_LR",
+    5: "UPDATE_RL",
+    6: "AS_PARENT_DIR",
+    7: "DELETE_BOTH_SIDES"}
+
+    __slots__ = ["name", "action"] 
+
+    def __init__(self, name, action=0):
+        self.name = name
+        assert (isinstance(action, int) and action >= 0 and action <= 7), "Action must be an integer between 0-4"
+        self.action = action
+    
+    def __eq__(self, obj: object) -> bool:
+        if isinstance(obj, Sync_item):
+            return self.name == obj.name
+        elif isinstance(obj, str):
+            return self.name == obj
+        else:
+            return False
+    
+    def __repr__(self):
+        action = self.ACTION_DICT[self.action]
+        return f"Sync_item({self.name}, {action})"
+    
+    def __lt__(self, obj):
+        if not self.action == obj.action:
+            return self.action < obj.action
+        return self.name < obj.name
+    
+
 class Syncer:
+    """Input: src_dict and tar_dict which are dictionaries containing all
+    non excluded dirs (as keys) with files as values in set corresponding to parent
+    dirs.
+
+    Intermediary variables:
+        Created with set operations (intersection and subtraction) on dictionary
+        keys and the sets in each directory:
+        
+
+    Properties: Created from input variables above upon execution of __init__:
+        self.source {string} : abs path to source dir
+        self.target {string} : abs path to target dir
+        self.id {int} : int representing the pair_id of the folders to sync.
+        self.src_items {list} : Nested list [[]]
+        self.tar_items {list} : Nested list [[]]
+        self.mutual_items {list} : Nested list [[]]
+    
+    These 3 properties have the same structure which is basically a nested list
+    of sync items: [[Sync_item("dir1", action), Sync_item("file1_in_dir1", action), ...],
+    [Sync_item("dir2", action), Sync_item("file2_in_dir2", action), ...]]    
+    Note that each "inner-list" represents a directory where the directory itself
+    comes first.
+   
+    Methods:
+
+    """
+
+    # This action_dict reverses keys - values compared to Sync_item ACTION_DICT
+    ACTION_DICT = {
+    "UNDECIDED": 0,
+    "IGNORE": 1,
+    "ADD": 2,
+    "DELETE": 3,
+    "UPDATE_LR": 4,
+    "UPDATE_RL": 5,
+    "AS_PARENT_DIR": 6,
+    "DELETE_BOTH_SIDES": 7}
+
+    def __init__(self, pair_id, source, target, src_dict, tar_dict):
+        self.id = pair_id
+        self.source = source
+        self.target = target
+        self.src_items = []
+        self.tar_items = []
+        self.mutual_items = []
+        self.create_sync_lists(src_dict, tar_dict)
+        self.decide_sync_actions()
+        
+    def create_sync_lists(self, src_dict, tar_dict):
+        def get_dir_list(dir, file_set, dir_action, file_action):
+            dir_as_list = [Sync_item(dir, dir_action)]
+            files_in_dir = []
+            for file in file_set:
+                file_obj = Sync_item(file, file_action)
+                files_in_dir.append(file_obj)
+
+            files_in_dir.sort()
+            return (dir_as_list + files_in_dir)
+
+        mutual_dirs = src_dict.keys() & tar_dict.keys()
+        src_dirs = src_dict.keys() - mutual_dirs
+        tar_dirs = tar_dict.keys() - mutual_dirs
+        
+        dir_act = self.ACTION_DICT["UNDECIDED"]
+        file_act = self.ACTION_DICT["AS_PARENT_DIR"]
+
+        # Add src_dirs and corresponding files in scr_dict to self.src_items
+        for dir in src_dirs:
+            dir_content = get_dir_list(dir, src_dict[dir], dir_act, file_act)
+            self.src_items.append(dir_content)
+
+        # Add tar_dirs and corresponding files in tar_dict to self.tar_items
+        for dir in tar_dirs:
+            dir_content = get_dir_list(dir, tar_dict[dir], dir_act, file_act)
+            self.tar_items.append(dir_content)
+        
+        # Add all dirs in mutual_dirs, including mutual files, to self.mutual_items.
+        # If there are files in mutual dirs on only one side then
+        # add dir with files to the corresponding side
+        dir_act = self.ACTION_DICT["IGNORE"]
+        file_act = self.ACTION_DICT["UNDECIDED"]
+
+        for dir in mutual_dirs:
+            mutual_files = src_dict[dir] & tar_dict[dir]
+            src_files = src_dict[dir] - mutual_files
+            tar_files = tar_dict[dir] - mutual_files
+            self.mutual_items.append(get_dir_list(dir, mutual_files, dir_act, file_act))
+
+            if src_files:
+                self.src_items.append(get_dir_list(dir, src_files, dir_act, file_act))
+            if tar_files:
+                self.tar_items.append(get_dir_list(dir, tar_files, dir_act, file_act))
+        
+        print(f"\nMutual items: {self.mutual_items}\n")
+        print(f"\nSource items: {self.src_items}\n")
+        print(f"\nTarget items: {self.tar_items}\n")
+        return
+    
+    def decide_sync_actions(self):
+        pass
+
+    def get_saved_items(self):
+        json_filepath = get_json_path(self.id)
+        with json_filepath.open("r") as json_file:
+            state_dict = json.load(json_file)
+        return state_dict
+    
+        
+class Syncer_old:
     
     def __init__(self, src_root, tar_root) -> None:
         # lr = left-to-right

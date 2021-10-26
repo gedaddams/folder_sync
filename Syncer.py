@@ -1,20 +1,30 @@
 class Sync_item:
+    """
+    Summary:
+        Each instance of a Sync_item represents a file or a dir.
+
+    Properties:
+        self.name {string} = Name of file or dir
+        self.action {int} = Corresponds to desired sync action in __ACTION_DICT
+
+    Methods:
+        Mostly self explanatory. 
+        __lt__ is included to add sort capability when instance is in list.
+    """
     __ACTION_DICT = {
     0: "IGNORE",
     1: "ADD",
     2: "DELETE",
     3: "UPDATE_LR",
-    4: "UPDATE_RL"}
+    4: "UPDATE_RL",
+    5: "AS_PARENT_DIR"}
 
-    __slots__ = ["name", "__action"] 
+    __slots__ = ["name", "action"] 
 
     def __init__(self, name, action):
         self.name = name
-        assert (isinstance(action, int) and action >= 0 and action <= 4), "Action must be an integer between 0-4"
-        self.__action = action
-    
-    def __hash__(self) -> int:
-        return hash(self.name)
+        assert (isinstance(action, int) and action >= 0 and action <= 5), "Action must be an integer between 0-4"
+        self.action = action
     
     def __eq__(self, obj: object) -> bool:
         if isinstance(obj, Sync_item):
@@ -25,16 +35,13 @@ class Sync_item:
             return False
     
     def __repr__(self):
-        return f"Sync_item({self.name}, {self.action})"
+        action = self.__ACTION_DICT[self.action]
+        return f"Sync_item({self.name}, {action})"
     
     def __lt__(self, obj):
-        if not self.__action == obj.__action:
-            return self.__action < obj.__action
+        if not self.action == obj.action:
+            return self.action < obj.action
         return self.name < obj.name
-    
-    @property
-    def action(self):
-        return self.__ACTION_DICT.get(self.__action, None)
     
 
 class Syncer:
@@ -42,21 +49,16 @@ class Syncer:
     non excluded dirs (as keys) with files as values in set corresponding to parent
     dirs.
 
-    Intermediary variables (following properties or variables are only temporary):
-    mutual_items: Dict of same format as input dicts containing dirs (keys) with
-    file sets (values) corresponding to files and dirs found in both input dicts.
-    source_items: Items found only in source, same format as mutual items.
-    target_items: Items found only in target, same format as mutual items.
-
-    Properties: Mostly created from the intermediary variables above:
-    self.source
-    self.target
-    self.upd_src - items that are to be updated, direction target -> source
-    self.add_src - items that are to be added, direction target -> source
-    self.del_src - items that are to be deleted from source
-    self.upd_tar - items that are to be updated, direction source -> target
-    self.add_tar - items that are to be added, direction source -> target
-    self.del_tar - items that are to be deleted from target
+    Properties: Created from input variables above upon execution of __init__:
+        self.src_items {list} : Nested list [[]]
+        self.tar_items {list} : Nested list [[]]
+        self.mutual_items {list} : Nested list [[]]
+    
+    These 3 properties have the same structure which is basically a nested list
+    of sync items: [[Sync_item("dir1", action), Sync_item("file1_in_dir1", action), ...],
+    [Sync_item("dir2", action), Sync_item("file2_in_dir2", action), ...]]    
+    Note that each "inner-list" represents a directory where the directory itself
+    comes first.
    
     Methods:
 

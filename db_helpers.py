@@ -1,5 +1,6 @@
 import sqlite3
 import os
+import pathlib
 import logging
 import json
 
@@ -10,19 +11,13 @@ Module saves most of its data in json files in folder:
 Folder pairs and configuration data is saved in sqlite database file.
 """
 
-logger = logging.getLogger(__name__)
-
-def get_db_filepath():
-    file_path = os.path.realpath(__file__)
-    dir_path = os.path.dirname(file_path)
-    db_relpath = os.path.join(".folder_sync_config", "folder_sync.db")
-    db_filepath = os.path.join(dir_path, db_relpath)
-    return db_filepath
+LOGGER = logging.getLogger(__name__)
+SCRIPT_PATH = pathlib.Path(__file__).parent.absolute()
 
 
 def setup_db():
-    db_filepath = get_db_filepath()
-    if not os.path.isfile(db_filepath):
+    db_filepath = SCRIPT_PATH / ".folder_sync_config" / "folder_sync.db"
+    if not db_filepath.is_file():
         from create_db import create_db
         con = sqlite3.connect(db_filepath, isolation_level=None) 
         cur = con.cursor()
@@ -34,31 +29,29 @@ def setup_db():
     return con, cur
 
 
-def get_json_filepath(folder_pair_id):
-    file_path = os.path.realpath(__file__)
-    dir_path = os.path.dirname(file_path)
-    json_file_name = "folder_pair_" + str(folder_pair_id) + ".json"
-    json_file_path = os.path.join(dir_path, ".folder_sync_config", "folder_pair_states", json_file_name)
-    return json_file_path
+def get_json_path(folder_pair_id):
+    config_path = SCRIPT_PATH / ".folder_sync_config"
+    file_name = "folder_pair_" + str(folder_pair_id) + ".json"
+    return config_path / "folder_pair_states" / file_name
 
 
 def save_folder_state(source, target, item_dict, folder_pair_id) -> None:
 
-    json_file_path = get_json_filepath(folder_pair_id)
+    json_file_path = get_json_path(folder_pair_id)
     state_dict = {"source": source, "target": target, "id": folder_pair_id, "items": item_dict}
 
     try:
-        with open(json_file_path, "w") as outfile:
+        with json_file_path.open("w") as outfile:
             json.dump(state_dict, outfile)
             return 0
     except Exception as error:
-        logger.warning(error)
+        LOGGER.warning(error)
         return 1
         
 
 def adjust_dirname(dirname):
     """adjust dirname to always end with separator (in linux = /)"""
-    return os.path.abspath(dirname) + os.path.sep
+    return str(pathlib.Path(dirname).absolute()) + os.path.sep
 
 
 def get_folder_pair_id(cur, source, target):
@@ -99,10 +92,6 @@ def get_folder_pair_id(cur, source, target):
         return run_sql(target, source)
         
 
-    
-
-
-
 def add_folder_pair(cur, source, target):
     """
     Creates folder pair in db table folder_pairs. If not already there a
@@ -118,7 +107,7 @@ def add_folder_pair(cur, source, target):
         {integer}: id of inserted row. 0 if fail.
     """
     
-    if not (os.path.isdir(source) and os.path.isdir(target)):
+    if not (pathlib.Path(source).is_dir() and pathlib.Path(target).is_dir()):
         print(f"Source: {source}")
         print(f"Target: {target}")
         error_message = "Both source and target arguments to add_folder_pair need to be directories"
