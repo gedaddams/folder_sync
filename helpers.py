@@ -163,38 +163,28 @@ class Excluder:
         return set(file_list)
 
 
-class Sync_item:
+class Dir_class:
     """
     Summary:
-        Each instance of a Sync_item represents a file or a dir.
+        Each instance of a Dir_item represents a file or a dir.
 
     Properties:
-        self.name {string} = Name of file or dir
-        self.action {int} = Corresponds to desired sync action in __ACTION_DICT
+        self.name {string} = Name of dir
+        self.excl_dir {bool} = Wether dir is new or not
 
     Methods:
         Mostly self explanatory. 
         __lt__ is included to add sort capability when instance is in list.
     """
-    ACTION_DICT = {
-    0: "IGNORE",
-    1: "UNDECIDED",
-    2: "ADD",
-    3: "DELETE",
-    4: "UPDATE_LR",
-    5: "UPDATE_RL",
-    6: "AS_PARENT_DIR",
-    7: "DELETE_BOTH_SIDES"}
 
-    __slots__ = ["name", "action"] 
+    __slots__ = ["name", "excl_dir"] 
 
-    def __init__(self, name, action=0):
+    def __init__(self, name, is_new):
         self.name = name
-        assert (isinstance(action, int) and action >= 0 and action <= 7), "Action must be an integer between 0-4"
-        self.action = action
+        self.excl_dir = is_new
     
     def __eq__(self, obj: object) -> bool:
-        if isinstance(obj, Sync_item):
+        if isinstance(obj, Dir_class):
             return self.name == obj.name
         elif isinstance(obj, str):
             return self.name == obj
@@ -202,12 +192,9 @@ class Sync_item:
             return False
     
     def __repr__(self):
-        action = self.ACTION_DICT[self.action]
-        return f"Sync_item({self.name}, {action})"
+        return f"Sync_item({self.name}, {self.excl_dir})"
     
     def __lt__(self, obj):
-        if not self.action == obj.action:
-            return self.action < obj.action
         return self.name < obj.name
     
 
@@ -239,35 +226,37 @@ class Syncer:
 
     """
 
-    # This action_dict reverses keys - values compared to Sync_item ACTION_DICT
-    ACTION_DICT = {
-    "IGNORE": 0,
-    "UNDECIDED": 1,
-    "ADD": 2,
-    "DELETE": 3,
-    "UPDATE_LR": 4,
-    "UPDATE_RL": 5,
-    "AS_PARENT_DIR": 6,
-    "DELETE_BOTH_SIDES": 7}
-
     def __init__(self, pair_id, source, target, src_dict, tar_dict):
+
+        self.sync_dict = {
+            # Contains strings representing paths (rel to source/tar)
+            "upd_lr": set(),
+            "upd_rl": set(),
+            "add_to_src": set(),
+            "add_to_tar": set(),
+
+            # del_from_src and del_from_tar contain path objects and are therefore lists
+            "del_from_src": [],
+            "del_from_tar": [],
+        }
+
         self.id = pair_id
         self.source = source
         self.target = target
         self.src_items = []
         self.tar_items = []
         self.mutual_items = []
+
         self.create_sync_lists(src_dict, tar_dict)
         self.read_saved_state()
         self.decide_sync_actions()
         
     def create_sync_lists(self, src_dict, tar_dict):
-        def get_dir_list(dir, file_set, dir_action, file_action):
-            dir_as_list = [Sync_item(dir, dir_action)]
+        def get_dir_list(dir, file_set, new_dir):
+            dir_as_list = [Dir_class(dir, new_dir)]
             files_in_dir = []
             for file in file_set:
-                file_obj = Sync_item(file, file_action)
-                files_in_dir.append(file_obj)
+                files_in_dir.append(file)
 
             files_in_dir.sort()
             return (dir_as_list + files_in_dir)
@@ -276,35 +265,30 @@ class Syncer:
         src_dirs = src_dict.keys() - mutual_dirs
         tar_dirs = tar_dict.keys() - mutual_dirs
         
-        dir_act = self.ACTION_DICT["UNDECIDED"]
-        file_act = self.ACTION_DICT["AS_PARENT_DIR"]
-
         # Add src_dirs and corresponding files in scr_dict to self.src_items
         for dir in src_dirs:
-            dir_content = get_dir_list(dir, src_dict[dir], dir_act, file_act)
+            dir_content = get_dir_list(dir, src_dict[dir], True)
             self.src_items.append(dir_content)
 
         # Add tar_dirs and corresponding files in tar_dict to self.tar_items
         for dir in tar_dirs:
-            dir_content = get_dir_list(dir, tar_dict[dir], dir_act, file_act)
+            dir_content = get_dir_list(dir, tar_dict[dir], True)
             self.tar_items.append(dir_content)
         
         # Add all dirs in mutual_dirs, including mutual files, to self.mutual_items.
         # If there are files in mutual dirs on only one side then
         # add dir with files to the corresponding side
-        dir_act = self.ACTION_DICT["IGNORE"]
-        file_act = self.ACTION_DICT["UNDECIDED"]
 
         for dir in mutual_dirs:
             mutual_files = src_dict[dir] & tar_dict[dir]
             src_files = src_dict[dir] - mutual_files
             tar_files = tar_dict[dir] - mutual_files
-            self.mutual_items.append(get_dir_list(dir, mutual_files, dir_act, file_act))
+            self.mutual_items.append(get_dir_list(dir, mutual_files, False))
 
-            if src_files:
-                self.src_items.append(get_dir_list(dir, src_files, dir_act, file_act))
-            if tar_files:
-                self.tar_items.append(get_dir_list(dir, tar_files, dir_act, file_act))
+            if src_files: # Files existing only on source side!
+                self.src_items.append(get_dir_list(dir, src_files, False))
+            if tar_files: # Files existing only on source side!
+                self.tar_items.append(get_dir_list(dir, tar_files, False))
         
         return
     
@@ -326,28 +310,28 @@ class Syncer:
         return True
     
     def decide_sync_actions(self):
-        
-        def decide_action_for_excl_items(items):
+        def decide_action_for_excl_items(items, add_set, del_list):
             for dir_content in items:
                 dir = dir_content[0]
-                dir_rel_path = dir.name
-                if dir.action:
+                dir_rel_path = pathlib.Path(dir.name)
+                if dir.excl_dir:
                     # Entire folder exists exclusively on one side
-                    if dir_rel_path in self.saved_dirs: # Previously existed on both sides
-                        sel_action = self.ACTION_DICT["DELETE"]
+                    if str(dir_rel_path) in self.saved_dirs: # Previously existed on both sides
+                        del_list += [ (dir_rel_path / file) for file in dir_content[1:] ]
+                        # Add dir last so it gets deleted last!
+                        del_list.append(dir_rel_path)
                     else: # Added since last sync
-                        sel_action = self.ACTION_DICT["ADD"]
-                    dir.action = sel_action
-                    for file in dir_content[1:]:
-                        file.action = sel_action
+                        add_list = [ (str(dir_rel_path / file)) for file in dir_content[1:] ]
+                        add_set.update(set(add_list))
+                        add_set.add(str(dir_rel_path))
                 else:
                     # Files exists exclusively but dir exists on both sides
                     for file in dir_content[1:]:
-                        file_path = pathlib.Path(dir_rel_path) / file_name
+                        file_path = dir_rel_path / file
                         if file_path in self.saved_files: # Previously existed on both sides
-                            file.action = self.ACTION_DICT["DELETE"]
+                            del_list.append(file_path)
                         else: # Added since last sync
-                            file.action = self.ACTION_DICT["ADD"]
+                            add_set.add(str(file_path))
                             
         # TODO DELETE following 2 lines. Only testing
         from time import time
@@ -357,20 +341,20 @@ class Syncer:
         for dir_content in self.mutual_items:
             dir_rel_path = dir_content[0].name
             for file in dir_content[1:]:
-                file_name = file.name
-                file_src = pathlib.Path(self.source) / dir_rel_path / file_name
-                file_tar = pathlib.Path(self.target) / dir_rel_path / file_name
+                file_rel_path = pathlib.Path(dir_rel_path) / file
+                file_src = pathlib.Path(self.source) / file_rel_path
+                file_tar = pathlib.Path(self.target) / file_rel_path
                 src_modified = file_src.lstat().st_mtime
                 tar_modified = file_tar.lstat().st_mtime
                 if src_modified > tar_modified:
-                    file.action = self.ACTION_DICT["UPDATE_LR"]
+                    self.sync_dict["upd_lr"].add(str(file_rel_path))
                 elif tar_modified > src_modified:
-                    file.action = self.ACTION_DICT["UPDATE_RL"]
-                else:
-                    file.action = self.ACTION_DICT["IGNORE"]
+                    self.sync_dict["upd_rl"].add(str(file_rel_path))
 
-        decide_action_for_excl_items(self.src_items)
-        decide_action_for_excl_items(self.tar_items)
+        decide_action_for_excl_items(self.src_items, 
+        self.sync_dict["add_to_tar"], self.sync_dict["del_from_src"])
+        decide_action_for_excl_items(self.tar_items,
+        self.sync_dict["add_to_src"], self.sync_dict["del_from_tar"])
 
         # TODO DELETE following line
         print(f"\n\nTime for decide_sync_action = {round(time() - time_point, 2)}")
