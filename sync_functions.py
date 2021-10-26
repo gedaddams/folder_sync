@@ -151,7 +151,7 @@ def create_sync_objects(source, target, src_files, tar_files, pair_id):
     dirs, files = set(), set()
 
     def get_saved_items():
-        json_filepath = get_json_filepath(pair_id)
+        json_filepath = get_json_path(pair_id)
         with open(json_filepath, "r") as json_file:
             state_dict = json.load(json_file)
         for dir in state_dict["items"]:
