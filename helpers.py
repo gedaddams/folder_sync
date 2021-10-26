@@ -177,8 +177,8 @@ class Sync_item:
         __lt__ is included to add sort capability when instance is in list.
     """
     ACTION_DICT = {
-    0: "UNDECIDED",
-    1: "IGNORE",
+    0: "IGNORE",
+    1: "UNDECIDED",
     2: "ADD",
     3: "DELETE",
     4: "UPDATE_LR",
@@ -241,8 +241,8 @@ class Syncer:
 
     # This action_dict reverses keys - values compared to Sync_item ACTION_DICT
     ACTION_DICT = {
-    "UNDECIDED": 0,
-    "IGNORE": 1,
+    "IGNORE": 0,
+    "UNDECIDED": 1,
     "ADD": 2,
     "DELETE": 3,
     "UPDATE_LR": 4,
@@ -258,6 +258,7 @@ class Syncer:
         self.tar_items = []
         self.mutual_items = []
         self.create_sync_lists(src_dict, tar_dict)
+        self.read_saved_state()
         self.decide_sync_actions()
         
     def create_sync_lists(self, src_dict, tar_dict):
@@ -305,21 +306,78 @@ class Syncer:
             if tar_files:
                 self.tar_items.append(get_dir_list(dir, tar_files, dir_act, file_act))
         
-        print(f"\nMutual items: {self.mutual_items}\n")
-        print(f"\nSource items: {self.src_items}\n")
-        print(f"\nTarget items: {self.tar_items}\n")
         return
     
-    def decide_sync_actions(self):
-        pass
-
-    def get_saved_items(self):
+    def read_saved_state(self):
         json_filepath = get_json_path(self.id)
-        with json_filepath.open("r") as json_file:
-            state_dict = json.load(json_file)
-        return state_dict
-    
+        try:
+            with json_filepath.open("r") as json_file:
+                state_dict = json.load(json_file)
+        except Exception as error:
+            LOGGER.warning("No previously saved file state exists!")
+            return False
+        self.saved_dirs = set()
+        self.saved_files = set()
+        for dir in state_dict["items"]:
+            self.saved_dirs.add(dir)
+            for item in state_dict["items"][dir]:
+                self.saved_files.add(str(pathlib.Path(dir) / item))
         
+        return True
+    
+    def decide_sync_actions(self):
+        
+        def decide_action_for_excl_items(items):
+            for dir_content in items:
+                dir = dir_content[0]
+                dir_rel_path = dir.name
+                if dir.action:
+                    # Entire folder exists exclusively on one side
+                    if dir_rel_path in self.saved_dirs: # Previously existed on both sides
+                        sel_action = self.ACTION_DICT["DELETE"]
+                    else: # Added since last sync
+                        sel_action = self.ACTION_DICT["ADD"]
+                    dir.action = sel_action
+                    for file in dir_content[1:]:
+                        file.action = sel_action
+                else:
+                    # Files exists exclusively but dir exists on both sides
+                    for file in dir_content[1:]:
+                        file_path = pathlib.Path(dir_rel_path) / file_name
+                        if file_path in self.saved_files: # Previously existed on both sides
+                            file.action = self.ACTION_DICT["DELETE"]
+                        else: # Added since last sync
+                            file.action = self.ACTION_DICT["ADD"]
+                            
+        # TODO DELETE following 2 lines. Only testing
+        from time import time
+        time_point = time()
+
+        # Goes through mutual items see if they differ(modification time)
+        for dir_content in self.mutual_items:
+            dir_rel_path = dir_content[0].name
+            for file in dir_content[1:]:
+                file_name = file.name
+                file_src = pathlib.Path(self.source) / dir_rel_path / file_name
+                file_tar = pathlib.Path(self.target) / dir_rel_path / file_name
+                src_modified = file_src.lstat().st_mtime
+                tar_modified = file_tar.lstat().st_mtime
+                if src_modified > tar_modified:
+                    file.action = self.ACTION_DICT["UPDATE_LR"]
+                elif tar_modified > src_modified:
+                    file.action = self.ACTION_DICT["UPDATE_RL"]
+                else:
+                    file.action = self.ACTION_DICT["IGNORE"]
+
+        decide_action_for_excl_items(self.src_items)
+        decide_action_for_excl_items(self.tar_items)
+
+        # TODO DELETE following line
+        print(f"\n\nTime for decide_sync_action = {round(time() - time_point, 2)}")
+        print()
+        return
+
+
 class Syncer_old:
     
     def __init__(self, src_root, tar_root) -> None:

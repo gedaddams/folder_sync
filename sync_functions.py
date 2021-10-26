@@ -28,6 +28,10 @@ def two_way_sync(pair_id, source, target, delete, dry_run, verbose):
     time_point = time()
     
     sync_obj = Syncer(pair_id, source, target, source_files, target_files)
+    LOGGER.debug(f"Time to create Syncer {round(time() - time_point, 2)}")
+
+    del source_files # No longer needed. Memory intensive.
+    del target_files # No longer needed. Memory intensive.
     
     # TODO Remove only for testing
     return
@@ -35,7 +39,6 @@ def two_way_sync(pair_id, source, target, delete, dry_run, verbose):
     sync_obj, del_src_obj, del_tar_obj = \
         create_sync_objects(source, target, source_files, target_files, pair_id)
 
-    LOGGER.debug(f"Time for create_sync_sets {round(time() - time_point, 2)}")
     time_point = time()
 
     # DOES THE DELETIONS
