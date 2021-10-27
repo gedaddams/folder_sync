@@ -1,7 +1,0 @@
-test
-testing
-testdir
-hejsan
-**/*.txt
-**/*.odt
-Dropbox/.dropbox.cache/*

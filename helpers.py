@@ -331,7 +331,7 @@ class Syncer:
                     # Files exists exclusively but dir exists on both sides
                     for file in dir_content[1:]:
                         file_path = dir_rel_path / file
-                        if file_path in self.saved_files: # Previously existed on both sides
+                        if str(file_path) in self.saved_files: # Previously existed on both sides
                             del_list.append(file_path)
                         else: # Added since last sync
                             add_set.add(str(file_path))
@@ -363,6 +363,29 @@ class Syncer:
         print(f"\n\nTime for decide_sync_action = {round(time() - time_point, 2)}")
         print()
         return
+
+    def deletions_necessary(self):
+        return (bool(self.sync_dict["delete_from_source"]) or 
+                bool(self.sync_dict["delete_from_tar"]))
+
+    def delete(self):
+        pass
+
+    def sync_necessary(self):
+        return (bool(self.sync_dict["upd_lr"]) or 
+                bool(self.sync_dict["upd_rl"]) or
+                bool(self.sync_dict["add_to_tar"]) or
+                bool(self.sync_dict["add_to_src"]))
+        pass
+
+    def create_sync_files(self):
+        pass
+
+    def sync(self):
+        pass
+
+    def save_file_state(self):
+        pass
 
 
 class Syncer_old:

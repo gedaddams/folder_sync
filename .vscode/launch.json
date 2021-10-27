@@ -16,7 +16,8 @@
             //"args": ["-s", "/mnt/d/Filer/", "-t", "~/Documents/filer_kopia/", "-d", "true", "-n", "true"]
             //"args": ["-s", "/mnt/d/mina bilder/", "-t", "/share/media/Mina bilder", "-d", "true", "-n", "true"]
             //"args": ["-s", "~/Documents/testdir/", "-t", "ubuntu@192.168.50.124:~/testdir/", "-d", "true"]
-            "args": ["-s", "~/Dropbox/Programmering/", "-t", "~/Dropbox/Övrigt/", "-d", "true"]
+            //"args": ["-s", "~/Dropbox/Programmering/", "-t", "~/Dropbox/Övrigt/", "-d", "true"]
+            "args": ["-s", "~/Documents/many_files_dir/", "-t", "~/Documents/many_files_dir_copy/", "-d", "true", "-n", "false"]
         }
     ]
 }
