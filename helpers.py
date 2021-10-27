@@ -1,5 +1,6 @@
 """This module contains classes and function format_rsync_output"""
 import os
+import sys
 import pathlib
 import subprocess
 import logging
@@ -298,8 +299,10 @@ class Syncer:
             with json_filepath.open("r") as json_file:
                 state_dict = json.load(json_file)
         except Exception as error:
-            LOGGER.warning("No previously saved file state exists!")
-            return False
+            LOGGER.critical("Couldn't read previous sync state")
+            LOGGER.critical(error)
+            print("\n")
+            sys.exit(1)
         self.saved_dirs = set()
         self.saved_files = set()
         for dir in state_dict["items"]:

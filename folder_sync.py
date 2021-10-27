@@ -27,7 +27,8 @@ def main():
             source = db_helpers.adjust_dirname(source)
             target = db_helpers.adjust_dirname(target)
             pair_id = db_helpers.get_folder_pair_id(cur, source, target)
-            if pair_id:
+            if True:
+            #TODO if pair_id:
                 sync_functions.two_way_sync(pair_id, source, target, delete, dry_run, verbose)                    
             else:
                 if dry_run:
