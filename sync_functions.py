@@ -120,15 +120,10 @@ def create_file_dict(top_directory, excl_obj=None):
     working_dir = os.getcwd()
     os.chdir(top_directory)
     file_dict = {}
-    first_dir = True
 
     for basedir, dirs, files in os.walk(top_directory, topdown=True):
 
-        if not first_dir:
-            basedir = os.path.relpath(basedir,top_directory)
-        else:
-            basedir = ""
-            first_dir = False
+        basedir = os.path.relpath(basedir,top_directory)
 
         # Seems this part is needed to copy symlink to dirs
         # TODO Maybe delete this part? Too much overhead?
@@ -288,6 +283,7 @@ def get_existing_items(source, target, del_obj_src=None, del_obj_tar=None):
 
     item_dict = {}
     for dir in dirs:
+        # HAVE TO USE LISTS SINCE SETS CANNOT BE SAVED TO JSON
         item_dict[dir] = []
     
     for item in files:

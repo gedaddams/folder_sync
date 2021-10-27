@@ -241,6 +241,7 @@ class Syncer:
             "del_from_tar": [],
         }
 
+        # self.state_dict = {} # Created by read_saved_state()
         self.id = pair_id
         self.source = source
         self.target = target
@@ -298,17 +299,12 @@ class Syncer:
         try:
             with json_filepath.open("r") as json_file:
                 state_dict = json.load(json_file)
+            self.state_dict = state_dict["items"]
         except Exception as error:
             LOGGER.critical("Couldn't read previous sync state")
             LOGGER.critical(error)
             print("\n")
             sys.exit(1)
-        self.saved_dirs = set()
-        self.saved_files = set()
-        for dir in state_dict["items"]:
-            self.saved_dirs.add(dir)
-            for item in state_dict["items"][dir]:
-                self.saved_files.add(str(pathlib.Path(dir) / item))
         
         return True
     
@@ -319,7 +315,7 @@ class Syncer:
                 dir_rel_path = pathlib.Path(dir.name)
                 if dir.excl_dir:
                     # Entire folder exists exclusively on one side
-                    if str(dir_rel_path) in self.saved_dirs: # Previously existed on both sides
+                    if str(dir_rel_path) in saved_dirs: # Previously existed on both sides
                         del_list += [ (dir_rel_path / file) for file in dir_content[1:] ]
                         # Add dir last so it gets deleted last!
                         del_list.append(dir_rel_path)
@@ -329,9 +325,10 @@ class Syncer:
                         add_set.add(str(dir_rel_path))
                 else:
                     # Files exists exclusively but dir exists on both sides
+                    saved_files = set(self.state_dict[str(dir_rel_path)])
                     for file in dir_content[1:]:
                         file_path = dir_rel_path / file
-                        if str(file_path) in self.saved_files: # Previously existed on both sides
+                        if str(file) in saved_files: # Previously existed on both sides
                             del_list.append(file_path)
                         else: # Added since last sync
                             add_set.add(str(file_path))
@@ -354,10 +351,12 @@ class Syncer:
                 elif tar_modified > src_modified:
                     self.sync_dict["upd_rl"].add(str(file_rel_path))
 
-        decide_action_for_excl_items(self.src_items, 
-        self.sync_dict["add_to_tar"], self.sync_dict["del_from_src"])
-        decide_action_for_excl_items(self.tar_items,
-        self.sync_dict["add_to_src"], self.sync_dict["del_from_tar"])
+        if self.src_items or self.tar_items:
+            saved_dirs = set(self.state_dict.keys())
+            decide_action_for_excl_items(self.src_items, 
+            self.sync_dict["add_to_tar"], self.sync_dict["del_from_src"])
+            decide_action_for_excl_items(self.tar_items,
+            self.sync_dict["add_to_src"], self.sync_dict["del_from_tar"])
 
         # TODO DELETE following line
         print(f"\n\nTime for decide_sync_action = {round(time() - time_point, 2)}")

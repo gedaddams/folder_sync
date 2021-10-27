@@ -8,3 +8,7 @@
     - Add safe_mode as default mode where you always first do a dry run and if you accept output then do real sync.
     - Avoid changing working directory at all. Right now this happens in create_file_dict. Change it.
     - create_sync_objects should be rewritten and incorporated in Syncer class
+    - RESOLVE ERROR: dir path:  was no in dirs but in files!
+    - RESOLVE ERROR: Right now something is wrong with state_dict Doesnt correctly store files?
+    At least files cannot be found. Something to do with changes implemented since last
+    commit since it worked correctly then (I think)
