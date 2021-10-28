@@ -213,8 +213,8 @@ class Syncer:
         self.source {string} : abs path to source dir
         self.target {string} : abs path to target dir
         self.id {int} : int representing the pair_id of the folders to sync.
-        self.src_items {list} : Nested list [[]]
-        self.tar_items {list} : Nested list [[]]
+        self.excl_src_items {list} : Nested list [[]]
+        self.excl_tar_items {list} : Nested list [[]]
         self.mutual_items {list} : Nested list [[]]
     
     These 3 properties have the same structure which is basically a nested list
@@ -245,8 +245,8 @@ class Syncer:
         self.id = pair_id
         self.source = source
         self.target = target
-        self.src_items = []
-        self.tar_items = []
+        self.excl_src_items = []
+        self.excl_tar_items = []
         self.mutual_items = []
 
         self.create_sync_lists(src_dict, tar_dict)
@@ -267,15 +267,15 @@ class Syncer:
         src_dirs = src_dict.keys() - mutual_dirs
         tar_dirs = tar_dict.keys() - mutual_dirs
         
-        # Add src_dirs and corresponding files in scr_dict to self.src_items
+        # Add src_dirs and corresponding files in scr_dict to self.excl_src_items
         for dir in src_dirs:
             dir_content = get_dir_list(dir, src_dict[dir], True)
-            self.src_items.append(dir_content)
+            self.excl_src_items.append(dir_content)
 
-        # Add tar_dirs and corresponding files in tar_dict to self.tar_items
+        # Add tar_dirs and corresponding files in tar_dict to self.excl_tar_items
         for dir in tar_dirs:
             dir_content = get_dir_list(dir, tar_dict[dir], True)
-            self.tar_items.append(dir_content)
+            self.excl_tar_items.append(dir_content)
         
         # Add all dirs in mutual_dirs, including mutual files, to self.mutual_items.
         # If there are files in mutual dirs on only one side then
@@ -288,9 +288,9 @@ class Syncer:
             self.mutual_items.append(get_dir_list(dir, mutual_files, False))
 
             if src_files: # Files existing only on source side!
-                self.src_items.append(get_dir_list(dir, src_files, False))
+                self.excl_src_items.append(get_dir_list(dir, src_files, False))
             if tar_files: # Files existing only on source side!
-                self.tar_items.append(get_dir_list(dir, tar_files, False))
+                self.excl_tar_items.append(get_dir_list(dir, tar_files, False))
         
         return
     
@@ -328,7 +328,7 @@ class Syncer:
                     saved_files = set(self.state_dict[str(dir_rel_path)])
                     for file in dir_content[1:]:
                         file_path = dir_rel_path / file
-                        if str(file) in saved_files: # Previously existed on both sides
+                        if file in saved_files: # Previously existed on both sides
                             del_list.append(file_path)
                         else: # Added since last sync
                             add_set.add(str(file_path))
@@ -351,16 +351,22 @@ class Syncer:
                 elif tar_modified > src_modified:
                     self.sync_dict["upd_rl"].add(str(file_rel_path))
 
-        if self.src_items or self.tar_items:
+        if self.excl_src_items or self.excl_tar_items:
+            # OBS saved_dirs are accessed by other scope from inner func decide_action...
             saved_dirs = set(self.state_dict.keys())
-            decide_action_for_excl_items(self.src_items, 
+            decide_action_for_excl_items(self.excl_src_items, 
             self.sync_dict["add_to_tar"], self.sync_dict["del_from_src"])
-            decide_action_for_excl_items(self.tar_items,
+            decide_action_for_excl_items(self.excl_tar_items,
             self.sync_dict["add_to_src"], self.sync_dict["del_from_tar"])
+            
+        time_point2 = time()
+        self.sync_dict["del_from_src"].sort()
+        self.sync_dict["del_from_tar"].sort()
+        print(f"\n\nTime for sorting = {round(time() - time_point2, 2)}")
+
 
         # TODO DELETE following line
         print(f"\n\nTime for decide_sync_action = {round(time() - time_point, 2)}")
-        print()
         return
 
     def deletions_necessary(self):

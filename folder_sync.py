@@ -77,6 +77,9 @@ def setup_new_folder_pair(cur, source, target):
         sys.exit(1)
     else:
         items = sync_functions.get_existing_items(source, target)
+        if items == "error":
+            cur.execute("ROLLBACK")
+            print(f"Initial sync failed. Required file permissions? Cant save folder state.")
         if db_helpers.save_folder_state(source, target, items, pair_id) == 0:
             cur.execute("COMMIT")
             print("Succesfully added folder pair for future syncing!")

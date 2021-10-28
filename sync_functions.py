@@ -241,59 +241,35 @@ def create_sync_objects(source, target, src_files, tar_files, pair_id):
 
 def get_existing_items(source, target, del_obj_src=None, del_obj_tar=None):
     """Function generates a list of items (files or dirs) that exist in both
-    source and target dir after syncing. Then it adds items existing 
-    on only 1 side (either) if they coexist in delete objects.
+    source and target dir after syncing.  
     """
+    # TODO this function is now overly simplified only usable after a complete
+    # rsync with delete active. Does not take failed deletions or addtions
+    # into account.
+
     src_items = create_file_dict(source)
     tar_items = create_file_dict(target)
 
     # Below operation returns a set after intersection is made.
     src_dirs, tar_dirs = set(src_items.keys()), set(tar_items.keys())
-    mutual_dirs = src_dirs & tar_dirs
-    all_dirs = src_dirs | tar_dirs
-    mutual_files, all_files = set(), set()
 
-    for dir in all_dirs:
+    sym_diff_dirs = src_dirs ^ tar_dirs
+    if sym_diff_dirs:
+        return "error"
+    
+    mutual_dirs = src_dirs & tar_dirs
+    item_dict = {}
+
+    for dir in mutual_dirs:
         src_files = src_items.get(dir, set())
         tar_files = tar_items.get(dir, set())
-        mutual_files_in_dir = src_files & tar_files
-        all_files_in_dir = src_files | tar_files
-        mutual_files.update(mutual_files_in_dir)
-        all_files.update(all_files_in_dir)
+        sym_diff_files = src_files ^ tar_files
+        if sym_diff_files:
+            return "error"
         
-    if del_obj_src and del_obj_tar:
-        delete_dirs = del_obj_src.dirs | del_obj_tar.dirs
-        delete_files = del_obj_src.get_all_files() | del_obj_tar.get_all_files()
-        exclusive_dirs = all_dirs - mutual_dirs
-        exclusive_files = all_files - mutual_files
+        item_dict[dir] = list(src_files & tar_files)
 
-        # extra here references that these files need to 'exist' in db to be
-        # deleted when user turns on deletions. If programs work deletions=False 
-        # should be the only reason for items to exist in extra_dirs and extra_files.
-        extra_dirs = delete_dirs & exclusive_dirs
-        extra_files = delete_files & exclusive_files
-        dirs = mutual_dirs | extra_dirs
-        files = mutual_files | extra_files
-        
-    elif del_obj_src or del_obj_tar:
-        raise ValueError("Provide zero or two delete objects. Not 1!")
-    else:
-        files = mutual_files
-        dirs = mutual_dirs
-
-    item_dict = {}
-    for dir in dirs:
-        # HAVE TO USE LISTS SINCE SETS CANNOT BE SAVED TO JSON
-        item_dict[dir] = []
-    
-    for item in files:
-        file_name, dir = os.path.basename(item), os.path.dirname(item)
-        # TODO: Not sure below if condition is necessary.
-        if not dir in item_dict:
-            LOGGER.debug(f"dir path: {dir} was no in dirs but in files!")
-            item_dict[dir] = []
-        item_dict[dir].append(file_name)
-
+    print()
     return item_dict
 
 
