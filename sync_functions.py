@@ -33,6 +33,9 @@ def two_way_sync(pair_id, source, target, delete, dry_run, verbose):
     del source_files # No longer needed. Memory intensive.
     del target_files # No longer needed. Memory intensive.
     
+    sync_obj.dryrun_delete()
+    #sync_obj.delete()
+
     # TODO Remove only for testing
     return
 
