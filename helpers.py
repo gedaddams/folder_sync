@@ -173,7 +173,7 @@ class Del_item:
     """
     def __init__(self) -> None:
         self.__files = {}
-        self.__dirs = {}    
+        self.__dirs = {}
         
     def add_file(self, item):
         if isinstance(item, pathlib.Path):
@@ -206,7 +206,7 @@ class Del_item:
 
     def delete_dirs(self):
         dir_list = list(self.__dirs.values())
-        dir_list.sort()
+        dir_list.sort(reverse=True)
         for item in dir_list:
             try:
                 item.rmdir()
@@ -286,9 +286,9 @@ class Syncer:
             "add_to_src": set(),
             "add_to_tar": set(),
 
-            # del_from_src and del_from_tar contain path objects and are therefore lists
-            "del_from_src": [],
-            "del_from_tar": [],
+            # src_deletes and tar_deletes contain path objects and are therefore lists
+            "src_deletes": Del_item(),
+            "tar_deletes": Del_item(),
         }
 
         # self.state_dict = {} # Created by read_saved_state()
@@ -359,16 +359,18 @@ class Syncer:
         return True
     
     def decide_sync_actions(self):
-        def decide_action_for_excl_items(items, add_set, del_list):
+        def decide_action_for_excl_items(items, add_set, del_obj):
             for dir_content in items:
                 dir = dir_content[0]
                 dir_rel_path = pathlib.Path(dir.name)
                 if dir.excl_dir:
                     # Entire folder exists exclusively on one side
                     if str(dir_rel_path) in saved_dirs: # Previously existed on both sides
-                        del_list += [ (dir_rel_path / file) for file in dir_content[1:] ]
+                        for item in dir_content[1:]:
+                            path_obj = dir_rel_path / item
+                            del_obj.add_file(path_obj)
                         # Add dir last so it gets deleted last!
-                        del_list.append(dir_rel_path)
+                        del_obj.add_dir(dir_rel_path)
                     else: # Added since last sync
                         add_list = [ (str(dir_rel_path / file)) for file in dir_content[1:] ]
                         add_set.update(set(add_list))
@@ -376,10 +378,10 @@ class Syncer:
                 else:
                     # Files exists exclusively but dir exists on both sides
                     saved_files = set(self.state_dict[str(dir_rel_path)])
-                    for file in dir_content[1:]:
-                        file_path = dir_rel_path / file
-                        if file in saved_files: # Previously existed on both sides
-                            del_list.append(file_path)
+                    for item in dir_content[1:]:
+                        file_path = dir_rel_path / item
+                        if item in saved_files: # Previously existed on both sides
+                            del_obj.add_file(file_path)
                         else: # Added since last sync
                             add_set.add(str(file_path))
                             
@@ -405,16 +407,10 @@ class Syncer:
             # OBS saved_dirs are accessed by other scope from inner func decide_action...
             saved_dirs = set(self.state_dict.keys())
             decide_action_for_excl_items(self.excl_src_items, 
-            self.sync_dict["add_to_tar"], self.sync_dict["del_from_src"])
+            self.sync_dict["add_to_tar"], self.sync_dict["src_deletes"])
             decide_action_for_excl_items(self.excl_tar_items,
-            self.sync_dict["add_to_src"], self.sync_dict["del_from_tar"])
+            self.sync_dict["add_to_src"], self.sync_dict["tar_deletes"])
             
-        time_point2 = time()
-        self.sync_dict["del_from_src"].sort()
-        self.sync_dict["del_from_tar"].sort()
-        print(f"\n\nTime for sorting = {round(time() - time_point2, 2)}")
-
-
         # TODO DELETE following line
         print(f"\n\nTime for decide_sync_action = {round(time() - time_point, 2)}")
         return
