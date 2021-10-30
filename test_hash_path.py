@@ -1,6 +1,7 @@
 from helpers import Hash_path
 
 path = Hash_path("/home/ged/Documents")
+print(path)
 str_path = "/home/ged/Documents"
 only_string = "/only/string"
 only_obj = Hash_path("only/object")
