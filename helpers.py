@@ -11,6 +11,23 @@ from db_helpers import get_json_path
 LOGGER = logging.getLogger(__name__)
 SCRIPT_PATH = pathlib.Path(__file__).parent.absolute()
 
+
+class Hash_path(pathlib.Path):
+    def __init__(self, str_path):
+        super().__init__(str_path)
+    
+    def __hash__(self):
+        str_repr = self.__str__()
+        return hash(str_repr)
+
+    def __eq__(self, other):
+        if isinstance(other, pathlib.Path):
+            return super().__eq__(other)
+        elif isinstance(other, str):
+            return self.__str__() == other
+        
+
+
 def format_rsync_output(st_ouput):
     # This formating function will only work reliable if not using -v or -P for rsync call.
     # You also have to use --itemize-changes flag.
