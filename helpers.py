@@ -164,6 +164,56 @@ class Excluder:
         return set(file_list)
 
 
+class Del_item:
+    """[summary]
+
+        Properties:
+        __files {dictionary}: path as string is key. PosixPath is value.
+        __dirs {dictionary}: path as string is key. PosixPath is value.
+    """
+    def __init__(self) -> None:
+        self.__files = {}
+        self.__dirs = {}    
+        
+    def add_file(self, item):
+        if isinstance(item, pathlib.Path):
+            self.__files[str(item)] = item
+        elif isinstance(item, str):
+            self.__files[item] = pathlib.Path(item)
+        else:
+            raise NotImplementedError
+
+    def add_dir(self, item):
+        if isinstance(item, pathlib.Path):
+            self.__dirs[str(item)] = item
+        elif isinstance(item, str):
+            self.__dirs[item] = pathlib.Path(item)
+        else:
+            raise NotImplementedError
+        
+    def get_file_set(self):
+        return set(self.__files.keys())
+
+    def get_dir_set(self):
+        return set(self.__dirs.keys())
+    
+    def delete_files(self):
+        for item in self.__files:
+            try:
+                item.unlink()
+            except:
+                LOGGER.error(f"Couldn't delete {str(item)}")
+
+    def delete_dirs(self):
+        dir_list = list(self.__dirs.values())
+        dir_list.sort()
+        for item in dir_list:
+            try:
+                item.rmdir()
+            except:
+                LOGGER.error(f"Couldn't delete {str(item)}")
+
+
 class Dir_class:
     """
     Summary:
