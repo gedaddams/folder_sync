@@ -198,18 +198,34 @@ class Del_item:
     def get_dir_set(self):
         return set(self.__dirs.keys())
     
-    def delete_files(self):
+    def delete_files(self, state_dict):
         if not self.__files:
             LOGGER.debug(f"No files to delete in {self}!")
             return
+        
+        # Corresponds to keys for lists in state_dict converted to sets
+        converted_dict_items = []
 
         for item in self.__files:
             try:
-                path = self.root / self.__files[item]
+                rel_path = self.__files[item]
+                path = self.root / rel_path
                 path.unlink()
+                print(f"Deleted file: {path}")
             except Exception as err:
                 LOGGER.error(f"Couldn't delete {item}")
                 LOGGER.error(err)
+            else:
+                # Following lines are to alter state in state_dict
+                key = str(rel_path.parent)
+                if not isinstance(state_dict[key], set):
+                    state_dict[key] = set(state_dict[key])
+                    converted_dict_items.append(key)
+                state_dict[key].remove(rel_path.name)
+        
+        for key in converted_dict_items:
+            state_dict[key] = list(state_dict[key])
+
     
     def dryrun_delete_files(self):
         if not self.__files:
@@ -217,9 +233,12 @@ class Del_item:
             return
 
         for item in self.__files:
-            print(f"Deleting file (dryrun): {item}")
+            path = self.root / self.__files[item]
+            print(f"Deleting file (dryrun): {path}")
+            
+        return
 
-    def delete_dirs(self):
+    def delete_dirs(self, state_dict):
         if not self.__dirs:
             LOGGER.debug(f"No dirs to delete in {self}!")
             return
@@ -230,9 +249,13 @@ class Del_item:
             try:
                 path = self.root / item
                 path.rmdir()
+                print(f"Deleted directory: {path}")
             except Exception as err:
                 LOGGER.error(f"Couldn't delete {str(item)}")
                 LOGGER.error(err)
+            else:
+                # TODO remove item from state_dict
+                pass
     
     def dryrun_delete_dirs(self):
         if not self.__dirs:
@@ -242,7 +265,10 @@ class Del_item:
         dir_list = self.get_dir_list()
 
         for item in dir_list:
-            print(f"Deleting directory (dryrun): {item}")
+            path = self.root / item
+            print(f"Deleting directory (dryrun): {path}")
+            
+        return
     
     def get_dir_list(self):
         try:
@@ -464,10 +490,10 @@ class Syncer:
                 bool(self.sync_dict["delete_from_tar"]))
 
     def delete(self):
-        self.sync_dict["src_deletes"].delete_files()
-        self.sync_dict["src_deletes"].delete_dirs()
-        self.sync_dict["tar_deletes"].delete_files()
-        self.sync_dict["tar_deletes"].delete_dirs()
+        self.sync_dict["src_deletes"].delete_files(self.state_dict)
+        self.sync_dict["src_deletes"].delete_dirs(self.state_dict)
+        self.sync_dict["tar_deletes"].delete_files(self.state_dict)
+        self.sync_dict["tar_deletes"].delete_dirs(self.state_dict)
     
     def dryrun_delete(self):
         self.sync_dict["src_deletes"].dryrun_delete_files()
