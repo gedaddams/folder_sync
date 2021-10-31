@@ -1,6 +1,7 @@
 """This module contains classes and function format_rsync_output"""
 import os
 import sys
+from time import time
 import pathlib
 import subprocess
 import logging
@@ -168,113 +169,41 @@ class Del_item:
     """[summary]
 
         Properties:
-        __files {dictionary}: path as string is key. PosixPath is value.
-        __dirs {dictionary}: path as string is key. PosixPath is value.
+        files {dictionary}: path as string is key. PosixPath is value.
+        dirs {dictionary}: path as string is key. PosixPath is value.
     """
     def __init__(self, root) -> None:
-        self.__files = {}
-        self.__dirs = {}
+        self.files = {}
+        self.dirs = {}
         self.root = root
         
     def add_file(self, item):
         if isinstance(item, pathlib.Path):
-            self.__files[str(item)] = item
+            self.files[str(item)] = item
         elif isinstance(item, str):
-            self.__files[item] = pathlib.Path(item)
+            self.files[item] = pathlib.Path(item)
         else:
             raise NotImplementedError
 
     def add_dir(self, item):
         if isinstance(item, pathlib.Path):
-            self.__dirs[str(item)] = item
+            self.dirs[str(item)] = item
         elif isinstance(item, str):
-            self.__dirs[item] = pathlib.Path(item)
+            self.dirs[item] = pathlib.Path(item)
         else:
             raise NotImplementedError
         
     def get_file_set(self):
-        return set(self.__files.keys())
+        return set(self.files.keys())
 
     def get_dir_set(self):
-        return set(self.__dirs.keys())
-    
-    def delete_files(self, state_dict):
-        if not self.__files:
-            LOGGER.debug(f"No files to delete in {self}!")
-            return
-        
-        # Corresponds to keys for lists in state_dict converted to sets
-        converted_dict_items = []
-
-        for item in self.__files:
-            try:
-                rel_path = self.__files[item]
-                path = self.root / rel_path
-                path.unlink()
-                print(f"Deleted file: {path}")
-            except Exception as err:
-                LOGGER.error(f"Couldn't delete {item}")
-                LOGGER.error(err)
-            else:
-                # Following lines are to alter state in state_dict
-                key = str(rel_path.parent)
-                if not isinstance(state_dict[key], set):
-                    state_dict[key] = set(state_dict[key])
-                    converted_dict_items.append(key)
-                state_dict[key].remove(rel_path.name)
-        
-        for key in converted_dict_items:
-            state_dict[key] = list(state_dict[key])
-
-    
-    def dryrun_delete_files(self):
-        if not self.__files:
-            LOGGER.debug(f"No files to delete in {self}!")
-            return
-
-        for item in self.__files:
-            path = self.root / self.__files[item]
-            print(f"Deleting file (dryrun): {path}")
-            
-        return
-
-    def delete_dirs(self, state_dict):
-        if not self.__dirs:
-            LOGGER.debug(f"No dirs to delete in {self}!")
-            return
-
-        dir_list = self.get_dir_list()
-
-        for item in dir_list:
-            try:
-                path = self.root / item
-                path.rmdir()
-                print(f"Deleted directory: {path}")
-            except Exception as err:
-                LOGGER.error(f"Couldn't delete {str(item)}")
-                LOGGER.error(err)
-            else:
-                # TODO remove item from state_dict
-                pass
-    
-    def dryrun_delete_dirs(self):
-        if not self.__dirs:
-            LOGGER.debug(f"No dirs to delete in {self}!")
-            return
-
-        dir_list = self.get_dir_list()
-
-        for item in dir_list:
-            path = self.root / item
-            print(f"Deleting directory (dryrun): {path}")
-            
-        return
+        return set(self.dirs.keys())
     
     def get_dir_list(self):
         try:
             dir_list = self.dir_list
         except AttributeError:
-            self.dir_list = list(self.__dirs.values())
+            self.dir_list = list(self.dirs.values())
             self.dir_list.sort(reverse=True)
             dir_list = self.dir_list
 
@@ -439,7 +368,6 @@ class Syncer:
                         for item in dir_content[1:]:
                             path_obj = dir_rel_path / item
                             del_obj.add_file(path_obj)
-                        # Add dir last so it gets deleted last!
                         del_obj.add_dir(dir_rel_path)
                     else: # Added since last sync
                         add_list = [ (str(dir_rel_path / file)) for file in dir_content[1:] ]
@@ -455,10 +383,6 @@ class Syncer:
                         else: # Added since last sync
                             add_set.add(str(file_path))
                             
-        # TODO DELETE following 2 lines. Only testing
-        from time import time
-        time_point = time()
-
         # Goes through mutual items see if they differ(modification time)
         for dir_content in self.mutual_items:
             dir_rel_path = dir_content[0].name
@@ -474,32 +398,109 @@ class Syncer:
                     self.sync_dict["upd_rl"].add(str(file_rel_path))
 
         if self.excl_src_items or self.excl_tar_items:
-            # OBS saved_dirs are accessed by other scope from inner func decide_action...
+            # OBS saved_dirs are accessed by outer scope from inner func decide_action...
             saved_dirs = set(self.state_dict.keys())
             decide_action_for_excl_items(self.excl_src_items, 
             self.sync_dict["add_to_tar"], self.sync_dict["src_deletes"])
             decide_action_for_excl_items(self.excl_tar_items,
             self.sync_dict["add_to_src"], self.sync_dict["tar_deletes"])
-            
-        # TODO DELETE following line
-        print(f"\n\nTime for decide_sync_action = {round(time() - time_point, 2)}")
-        return
 
     def deletions_necessary(self):
         return (bool(self.sync_dict["delete_from_source"]) or 
                 bool(self.sync_dict["delete_from_tar"]))
 
+    def delete_files(self):
+        del_obj1, del_obj2 = self.sync_dict["src_deletes"], self.sync_dict["tar_deletes"]
+        
+        # Corresponds to keys for lists in state_dict converted to sets
+        converted_dict_items = []
+
+        for del_obj in (del_obj1, del_obj2):
+
+            if not del_obj.files:
+                LOGGER.debug(f"No files to delete in {del_obj.root}")
+                continue
+
+            for item in del_obj.files:
+                try:
+                    rel_path = del_obj.files[item]
+                    path = del_obj.root / rel_path
+                    path.unlink()
+                    print(f"Deleted file: {path}")
+                except Exception as err:
+                    LOGGER.error(f"Couldn't delete {item}")
+                    LOGGER.error(err)
+                else:
+                    # Following lines are to alter state in state_dict
+                    key = str(rel_path.parent)
+                    try:
+                        # I use discard here so that error is thrown if value is still list!
+                        self.state_dict[key].discard(rel_path.name)
+                        converted_dict_items.append(key)
+                    except:
+                        self.state_dict[key] = set(self.state_dict[key])
+                        self.state_dict[key].discard(rel_path.name)
+                        converted_dict_items.append(key)
+                        
+        for key in converted_dict_items:
+            self.state_dict[key] = list(self.state_dict[key])
+            
+    def dryrun_delete_files(self):
+        del_obj1, del_obj2 = self.sync_dict["src_deletes"], self.sync_dict["tar_deletes"]
+        
+        for del_obj in (del_obj1, del_obj2):
+            
+            if not del_obj.files:
+                LOGGER.debug(f"No files to delete in {del_obj.root}")
+                continue
+
+            for item in del_obj.files:
+                path = del_obj.root / del_obj.files[item]
+                print(f"Deleting file (dryrun): {path}")
+            
+    def delete_dirs(self):
+        del_obj1, del_obj2 = self.sync_dict["src_deletes"], self.sync_dict["tar_deletes"]
+        
+        for del_obj in (del_obj1, del_obj2):
+            if not del_obj.dirs:
+                LOGGER.debug(f"No dirs to delete in {del_obj.root}")
+                continue
+
+            dir_list = del_obj.get_dir_list()
+
+            for item in dir_list:
+                try:
+                    path = del_obj.root / item
+                    path.rmdir()
+                    print(f"Deleted directory: {path}")
+                except Exception as err:
+                    LOGGER.error(f"Couldn't delete {str(item)}")
+                    LOGGER.error(err)
+                else:
+                    print(str(item))
+                    del self.state_dict[str(item)]
+    
+    def dryrun_delete_dirs(self):
+        del_obj1, del_obj2 = self.sync_dict["src_deletes"], self.sync_dict["tar_deletes"]
+        
+        for del_obj in (del_obj1, del_obj2):
+            if not del_obj.dirs:
+                LOGGER.debug(f"No dirs to delete in {del_obj.root}")
+                continue
+
+            dir_list = del_obj.get_dir_list()
+
+            for item in dir_list:
+                path = del_obj.root / item
+                print(f"Deleting directory (dryrun): {path}")
+            
     def delete(self):
-        self.sync_dict["src_deletes"].delete_files(self.state_dict)
-        self.sync_dict["src_deletes"].delete_dirs(self.state_dict)
-        self.sync_dict["tar_deletes"].delete_files(self.state_dict)
-        self.sync_dict["tar_deletes"].delete_dirs(self.state_dict)
+        self.delete_files()
+        self.delete_dirs()
     
     def dryrun_delete(self):
-        self.sync_dict["src_deletes"].dryrun_delete_files()
-        self.sync_dict["src_deletes"].dryrun_delete_dirs()
-        self.sync_dict["tar_deletes"].dryrun_delete_files()
-        self.sync_dict["tar_deletes"].dryrun_delete_dirs()
+        self.dryrun_delete_files()
+        self.dryrun_delete_dirs()
 
     def sync_necessary(self):
         return (bool(self.sync_dict["upd_lr"]) or 
@@ -508,8 +509,30 @@ class Syncer:
                 bool(self.sync_dict["add_to_src"]))
         pass
 
-    def create_sync_files(self):
-        pass
+    def create_textfiles(self):
+        # Private method to create textfiles necessary for rsync call.
+        config_dir = SCRIPT_PATH / ".folder_sync_config"
+        lr_items = self.sync_dict["upd_lr"] | self.sync_dict["add_to_tar"]
+        rl_items = self.sync_dict["upd_rl"] | self.sync_dict["add_to_src"]
+        timepoint = round(time())
+        lr_filename = f"lr_sync_{timepoint}.tmp"
+        rl_filename = f"rl_sync_{timepoint}.tmp"
+
+        self.txtfile_lr_path = config_dir / lr_filename
+        with self.txtfile_lr_path.open('w') as file_lr:
+            file_lr.writelines([line + '\n' for line in lr_items])
+
+        self.txtfile_rl_path = config_dir / rl_filename
+        with self.txtfile_rl_path.open('w') as file_rl:
+            file_rl.writelines([line + '\n' for line in rl_items])
+        
+    def remove_textfiles(self):
+        for item in (self.txtfile_lr_path, self.txtfile_rl_path):
+            try:
+                item.unlink()
+            except Exception:
+                # No action needed
+                pass
 
     def sync(self):
         pass

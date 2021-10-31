@@ -33,8 +33,13 @@ def two_way_sync(pair_id, source, target, delete, dry_run, verbose):
     del source_files # No longer needed. Memory intensive.
     del target_files # No longer needed. Memory intensive.
     
+    time_point = time()
     sync_obj.dryrun_delete()
-    sync_obj.delete()
+    #sync_obj.delete()
+    LOGGER.debug(f"Time to delete: {round(time() - time_point, 2)}")
+
+    sync_obj.create_textfiles()
+    sync_obj.remove_textfiles()
 
     # TODO Remove only for testing
     return

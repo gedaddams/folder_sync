@@ -12,3 +12,4 @@
     - RESOLVE ERROR: Right now something is wrong with state_dict Doesnt correctly store files?
     At least files cannot be found. Something to do with changes implemented since last
     commit since it worked correctly then (I think)
+    - Rething sort from format rsync output. Takes to much time.
