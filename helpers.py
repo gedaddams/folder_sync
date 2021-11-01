@@ -165,7 +165,7 @@ class Excluder:
         return set(file_list)
 
 
-class Del_item:
+class Items:
     """[summary]
 
         Properties:
@@ -199,6 +199,9 @@ class Del_item:
     def get_dir_set(self):
         return set(self.dirs.keys())
     
+    def get_item_set(self):
+        return self.dirs.keys() | self.files.keys()
+    
     def get_dir_list(self):
         try:
             dir_list = self.dir_list
@@ -210,7 +213,7 @@ class Del_item:
         return dir_list
     
     def __repr__(self):
-        return f"Del_item({self.root})"
+        return f"Items({self.root})"
 
 
 class Dir_class:
@@ -286,12 +289,12 @@ class Syncer:
             # Contains strings representing paths (rel to source/tar)
             "upd_lr": set(),
             "upd_rl": set(),
-            "add_to_src": set(),
-            "add_to_tar": set(),
+            "add_to_src": Items(source),
+            "add_to_tar": Items(target),
 
             # src_deletes and tar_deletes contain path objects and are therefore lists
-            "src_deletes": Del_item(source),
-            "tar_deletes": Del_item(target),
+            "src_deletes": Items(source),
+            "tar_deletes": Items(target),
         }
 
         # self.state_dict = {} # Created by read_saved_state()
@@ -363,7 +366,7 @@ class Syncer:
         return True
     
     def decide_sync_actions(self):
-        def decide_action_for_excl_items(items, add_set, del_obj):
+        def decide_action_for_excl_items(items, add_obj, del_obj):
             for dir_content in items:
                 dir = dir_content[0]
                 dir_rel_path = pathlib.Path(dir.name)
@@ -375,9 +378,10 @@ class Syncer:
                             del_obj.add_file(path_obj)
                         del_obj.add_dir(dir_rel_path)
                     else: # Added since last sync
-                        add_list = [ (str(dir_rel_path / file)) for file in dir_content[1:] ]
-                        add_set.update(set(add_list))
-                        add_set.add(str(dir_rel_path))
+                        for item in dir_content[1:]:
+                            path_obj = dir_rel_path / item
+                            add_obj.add_file(path_obj)
+                        add_obj.add_dir(dir_rel_path)
                 else:
                     # Files exists exclusively but dir exists on both sides
                     saved_files = set(self.state_dict.get(str(dir_rel_path), set()))
@@ -386,7 +390,7 @@ class Syncer:
                         if item in saved_files: # Previously existed on both sides
                             del_obj.add_file(file_path)
                         else: # Added since last sync
-                            add_set.add(str(file_path))
+                            add_obj.add_file(file_path)
                             
         # Goes through mutual items see if they differ(modification time)
         for dir_content in self.mutual_items:
@@ -534,8 +538,8 @@ class Syncer:
     def create_textfiles(self):
         # Private method to create textfiles necessary for rsync call.
         config_dir = SCRIPT_PATH / ".folder_sync_config"
-        lr_items = self.sync_dict["upd_lr"] | self.sync_dict["add_to_tar"]
-        rl_items = self.sync_dict["upd_rl"] | self.sync_dict["add_to_src"]
+        lr_items = self.sync_dict["upd_lr"] | self.sync_dict["add_to_tar"].get_item_set()
+        rl_items = self.sync_dict["upd_rl"] | self.sync_dict["add_to_src"].get_item_set()
         timepoint = round(time())
         lr_filename = f"lr_sync_{timepoint}.tmp"
         rl_filename = f"rl_sync_{timepoint}.tmp"
@@ -572,7 +576,6 @@ class Syncer:
             new_state_dict[key] = list(self.new_state_dict[key])
         
         return new_state_dict
-
 
 
 class Syncer_old:
