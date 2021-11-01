@@ -229,9 +229,9 @@ class Dir_class:
 
     __slots__ = ["name", "excl_dir"] 
 
-    def __init__(self, name, is_new):
+    def __init__(self, name, is_excl):
         self.name = name
-        self.excl_dir = is_new
+        self.excl_dir = is_excl
     
     def __eq__(self, obj: object) -> bool:
         if isinstance(obj, Dir_class):
@@ -242,7 +242,11 @@ class Dir_class:
             return False
     
     def __repr__(self):
-        return f"Sync_item({self.name}, {self.excl_dir})"
+        if self.excl_dir:
+            return f"excl-dir: '{self.name}'"
+        else:
+            return f"mutual-dir: '{self.name}'"
+
     
     def __lt__(self, obj):
         return self.name < obj.name
@@ -301,6 +305,7 @@ class Syncer:
         self.create_sync_lists(src_dict, tar_dict)
         self.read_saved_state()
         self.decide_sync_actions()
+        self.create_new_state_dict()
         
     def create_sync_lists(self, src_dict, tar_dict):
         def get_dir_list(dir, file_set, new_dir):
@@ -375,7 +380,7 @@ class Syncer:
                         add_set.add(str(dir_rel_path))
                 else:
                     # Files exists exclusively but dir exists on both sides
-                    saved_files = set(self.state_dict[str(dir_rel_path)])
+                    saved_files = set(self.state_dict.get(str(dir_rel_path), set()))
                     for item in dir_content[1:]:
                         file_path = dir_rel_path / item
                         if item in saved_files: # Previously existed on both sides
@@ -405,15 +410,43 @@ class Syncer:
             decide_action_for_excl_items(self.excl_tar_items,
             self.sync_dict["add_to_src"], self.sync_dict["tar_deletes"])
 
+    def create_new_state_dict(self):
+        # This sub only adds mutual items and items to be deleted.
+        # The latter will be removed upon delition.
+        # Items to be added during sync are added after succesful syncing
+        self.new_state_dict = {}
+        
+        # Adds mutual items
+        for dir in self.mutual_items:
+            self.new_state_dict[dir[0].name] = set()
+            for file in dir[1:]:
+                self.new_state_dict[dir[0].name].add(file)
+        
+        # Adds dirs to be deleted
+        delete_dirs = self.sync_dict["src_deletes"].dirs.keys() | self.sync_dict["tar_deletes"].dirs.keys()
+        for dir in delete_dirs:
+            if not dir in self.new_state_dict:
+                self.new_state_dict[dir] = set()
+
+        # Adds files to be deleted
+        src_delete_files = set(self.sync_dict["src_deletes"].files.values())
+        tar_delete_files = set(self.sync_dict["tar_deletes"].files.values())
+        delete_files = src_delete_files | tar_delete_files
+
+        for item in delete_files:
+            dir = str(item.parent)
+            try:
+                self.new_state_dict[dir].add(item.name)
+            except KeyError:
+                self.new_state_dict[dir] = set()
+                self.new_state_dict[dir].add(item.name)
+
     def deletions_necessary(self):
         return (bool(self.sync_dict["delete_from_source"]) or 
                 bool(self.sync_dict["delete_from_tar"]))
 
     def delete_files(self):
         del_obj1, del_obj2 = self.sync_dict["src_deletes"], self.sync_dict["tar_deletes"]
-        
-        # Corresponds to keys for lists in state_dict converted to sets
-        converted_dict_items = []
 
         for del_obj in (del_obj1, del_obj2):
 
@@ -431,19 +464,9 @@ class Syncer:
                     LOGGER.error(f"Couldn't delete {item}")
                     LOGGER.error(err)
                 else:
-                    # Following lines are to alter state in state_dict
+                    # Following lines are to alter state in new_state_dict
                     key = str(rel_path.parent)
-                    try:
-                        # I use discard here so that error is thrown if value is still list!
-                        self.state_dict[key].discard(rel_path.name)
-                        converted_dict_items.append(key)
-                    except:
-                        self.state_dict[key] = set(self.state_dict[key])
-                        self.state_dict[key].discard(rel_path.name)
-                        converted_dict_items.append(key)
-                        
-        for key in converted_dict_items:
-            self.state_dict[key] = list(self.state_dict[key])
+                    self.new_state_dict[key].remove(rel_path.name)
             
     def dryrun_delete_files(self):
         del_obj1, del_obj2 = self.sync_dict["src_deletes"], self.sync_dict["tar_deletes"]
@@ -477,8 +500,7 @@ class Syncer:
                     LOGGER.error(f"Couldn't delete {str(item)}")
                     LOGGER.error(err)
                 else:
-                    print(str(item))
-                    del self.state_dict[str(item)]
+                    del self.new_state_dict[str(item)]
     
     def dryrun_delete_dirs(self):
         del_obj1, del_obj2 = self.sync_dict["src_deletes"], self.sync_dict["tar_deletes"]
@@ -537,8 +559,20 @@ class Syncer:
     def sync(self):
         pass
 
-    def save_file_state(self):
+    def add_added_files_to_state(self, files, sync_returncode):
+        # Adds succesfully added filew to self.new_state_dict
+        # If rsync return successful returncode assumes additions were succesful
+        # Otherwise checks if files exist on both sides
+        # Runs 1 time for each sync direction
         pass
+    
+    def get_new_state_dict(self):
+        new_state_dict = {}
+        for key in self.new_state_dict:
+            new_state_dict[key] = list(self.new_state_dict[key])
+        
+        return new_state_dict
+
 
 
 class Syncer_old:

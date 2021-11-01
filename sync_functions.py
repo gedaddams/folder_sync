@@ -35,11 +35,14 @@ def two_way_sync(pair_id, source, target, delete, dry_run, verbose):
     
     time_point = time()
     sync_obj.dryrun_delete()
-    #sync_obj.delete()
+    sync_obj.delete()
     LOGGER.debug(f"Time to delete: {round(time() - time_point, 2)}")
 
     sync_obj.create_textfiles()
     sync_obj.remove_textfiles()
+    
+    state_dict = sync_obj.get_new_state_dict()
+    save_folder_state(source, target, state_dict, pair_id)
 
     # TODO Remove only for testing
     return
