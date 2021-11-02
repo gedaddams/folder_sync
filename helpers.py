@@ -202,6 +202,11 @@ class Items:
     def get_item_set(self):
         return self.dirs.keys() | self.files.keys()
     
+    def print_items(self):
+        item_set = self.get_item_set()
+        for item in item_set:
+            print(item)
+    
     def get_dir_list(self):
         try:
             dir_list = self.dir_list
@@ -284,33 +289,37 @@ class Syncer:
     """
 
     def __init__(self, pair_id, source, target, src_dict, tar_dict):
+        self.id = pair_id
+        self.source = source
+        self.target = target
+        self.src_dict = src_dict
+        self.tar_dict = tar_dict
+        # self.state_dict = {} # Created by read_saved_state()
+        self.read_saved_state()
+        self.initialize()
+        self.create_new_state_dict()
 
+    def initialize(self):
         self.sync_dict = {
             # Contains strings representing paths (rel to source/tar)
             "upd_lr": set(),
             "upd_rl": set(),
-            "add_to_src": Items(source),
-            "add_to_tar": Items(target),
+            "add_to_src": Items(self.source),
+            "add_to_tar": Items(self.target),
 
             # src_deletes and tar_deletes contain path objects and are therefore lists
-            "src_deletes": Items(source),
-            "tar_deletes": Items(target),
+            "src_deletes": Items(self.source),
+            "tar_deletes": Items(self.target),
         }
 
-        # self.state_dict = {} # Created by read_saved_state()
-        self.id = pair_id
-        self.source = source
-        self.target = target
         self.excl_src_items = []
         self.excl_tar_items = []
         self.mutual_items = []
 
-        self.create_sync_lists(src_dict, tar_dict)
-        self.read_saved_state()
+        self.create_sync_lists()
         self.decide_sync_actions()
-        self.create_new_state_dict()
-        
-    def create_sync_lists(self, src_dict, tar_dict):
+
+    def create_sync_lists(self):
         def get_dir_list(dir, file_set, new_dir):
             dir_as_list = [Dir_class(dir, new_dir)]
             files_in_dir = []
@@ -320,18 +329,18 @@ class Syncer:
             files_in_dir.sort()
             return (dir_as_list + files_in_dir)
 
-        mutual_dirs = src_dict.keys() & tar_dict.keys()
-        src_dirs = src_dict.keys() - mutual_dirs
-        tar_dirs = tar_dict.keys() - mutual_dirs
+        mutual_dirs = self.src_dict.keys() & self.tar_dict.keys()
+        src_dirs = self.src_dict.keys() - mutual_dirs
+        tar_dirs = self.tar_dict.keys() - mutual_dirs
         
         # Add src_dirs and corresponding files in scr_dict to self.excl_src_items
         for dir in src_dirs:
-            dir_content = get_dir_list(dir, src_dict[dir], True)
+            dir_content = get_dir_list(dir, self.src_dict[dir], True)
             self.excl_src_items.append(dir_content)
 
         # Add tar_dirs and corresponding files in tar_dict to self.excl_tar_items
         for dir in tar_dirs:
-            dir_content = get_dir_list(dir, tar_dict[dir], True)
+            dir_content = get_dir_list(dir, self.tar_dict[dir], True)
             self.excl_tar_items.append(dir_content)
         
         # Add all dirs in mutual_dirs, including mutual files, to self.mutual_items.
@@ -339,9 +348,9 @@ class Syncer:
         # add dir with files to the corresponding side
 
         for dir in mutual_dirs:
-            mutual_files = src_dict[dir] & tar_dict[dir]
-            src_files = src_dict[dir] - mutual_files
-            tar_files = tar_dict[dir] - mutual_files
+            mutual_files = self.src_dict[dir] & self.tar_dict[dir]
+            src_files = self.src_dict[dir] - mutual_files
+            tar_files = self.tar_dict[dir] - mutual_files
             self.mutual_items.append(get_dir_list(dir, mutual_files, False))
 
             if src_files: # Files existing only on source side!
@@ -533,13 +542,59 @@ class Syncer:
                 bool(self.sync_dict["upd_rl"]) or
                 bool(self.sync_dict["add_to_tar"]) or
                 bool(self.sync_dict["add_to_src"]))
-        pass
+
+    def remove_doubles(self):
+
+        self.lr_items = self.sync_dict["add_to_tar"].get_item_set()
+        self.rl_items = self.sync_dict["add_to_src"].get_item_set()
+        intersection_set = self.lr_items & self.rl_items
+        if intersection_set:
+            duplicates = Items("Duplicate items")
+            for rel_item in intersection_set:
+                self.lr_items.remove(rel_item)
+                self.rl_items.remove(rel_item)
+                src_item = pathlib.Path(self.source) / rel_item
+                tar_item = pathlib.Path(self.target) / rel_item
+
+                for root, item in ((self.source, src_item), (self.target, tar_item)):
+                    if item.is_file() or item.is_symlink():
+                        dir = str(pathlib.Path(rel_item).parent)
+                        duplicates.add_file(item)
+                        if root == self.source:
+                            self.src_dict[dir].remove(rel_item)
+                        else:
+                            self.tar_dict[dir].remove(rel_item)
+                    elif item.is_dir():
+                        duplicates.add_dir(item)
+                        if root == self.source:
+                            del self.src_dict[rel_item]
+                        else:
+                            del self.tar_dict[rel_item]
+                    else:
+                        LOGGER.error("Duplicate that is neither dir nor file!?")
+
+            # This is costly but necessary since dir on one side can have files
+            # or more dirs inside. Sync structs are not organized to remove
+            # entire dirs. Hence reinitialize is necessary in this rare scenario.
+            self.initialize()
+            self.duplicates = duplicates
+            return self.duplicates
+
+        return None
 
     def create_textfiles(self):
         # Private method to create textfiles necessary for rsync call.
+        
+        try:
+            lr_items = self.lr_items
+            rl_items = self.rl_items
+        except AttributeError:
+            # Normally remove_doubles will have been called before create_textfiles.
+            self.remove_doubles()
+            lr_items = self.lr_items
+            rl_items = self.rl_items
+
         config_dir = SCRIPT_PATH / ".folder_sync_config"
-        lr_items = self.sync_dict["upd_lr"] | self.sync_dict["add_to_tar"].get_item_set()
-        rl_items = self.sync_dict["upd_rl"] | self.sync_dict["add_to_src"].get_item_set()
         timepoint = round(time())
         lr_filename = f"lr_sync_{timepoint}.tmp"
         rl_filename = f"rl_sync_{timepoint}.tmp"
@@ -551,6 +606,10 @@ class Syncer:
         self.txtfile_rl_path = config_dir / rl_filename
         with self.txtfile_rl_path.open('w') as file_rl:
             file_rl.writelines([line + '\n' for line in rl_items])
+        
+        # Cleanup
+        delattr(self, "lr_items")
+        delattr(self, "rl_items")
         
     def remove_textfiles(self):
         for item in (self.txtfile_lr_path, self.txtfile_rl_path):

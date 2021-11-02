@@ -29,15 +29,25 @@ def two_way_sync(pair_id, source, target, delete, dry_run, verbose):
     
     sync_obj = Syncer(pair_id, source, target, source_files, target_files)
     LOGGER.debug(f"Time to create Syncer {round(time() - time_point, 2)}")
-
-    del source_files # No longer needed. Memory intensive.
-    del target_files # No longer needed. Memory intensive.
     
-    time_point = time()
-    sync_obj.dryrun_delete()
-    sync_obj.delete()
-    LOGGER.debug(f"Time to delete: {round(time() - time_point, 2)}")
+    if delete:
+        time_point = time()
+        if dry_run:
+            sync_obj.dryrun_delete()
+        else:
+            sync_obj.delete()
 
+        LOGGER.debug(f"Time to delete: {round(time() - time_point, 2)}")
+
+    doubles = sync_obj.remove_doubles()
+    if doubles:
+        # This happens if dir on one side is added, since last saved state, 
+        # simultaneously as file on other side was added.
+        LOGGER.warning(f"The following items could not be synced:\n\n")
+        doubles.print_items()
+        LOGGER.info(f"\nThis most likely depends on file on one side having\
+the same name as dir on the other")
+            
     sync_obj.create_textfiles()
     sync_obj.remove_textfiles()
     
