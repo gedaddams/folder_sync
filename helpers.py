@@ -540,16 +540,34 @@ class Syncer:
                 bool(self.sync_dict["add_to_tar"]) or
                 bool(self.sync_dict["add_to_src"]))
 
-    def remove_doubles(self, deletions_active):
+    def remove_doubles(self, deletions_active, dryrun):
 
         lr_additions = self.sync_dict["add_to_tar"].get_item_set()
         rl_additions = self.sync_dict["add_to_src"].get_item_set()
-        intersection_set = lr_additions & rl_additions
 
-        if not deletions_active:
-            intersections2 = lr_additions & self.sync_dict["tar_deletes"].get_item_set()
-            intersections3 = rl_additions & self.sync_dict["src_deletes"].get_item_set()
+        intersection_set = lr_additions & rl_additions
+        intersections2 = lr_additions & self.sync_dict["tar_deletes"].get_item_set()
+        intersections3 = rl_additions & self.sync_dict["src_deletes"].get_item_set()
+
+        if not deletions_active or dryrun:
             intersection_set = intersection_set | intersections2 | intersections3
+        elif intersections2 or intersections3:
+            # TODO Make sure items no longer exists (deletions succesful)
+            intersection4 = set()
+            src_items = self.sync_dict["src_deletes"].get_item_set()
+            tar_items = self.sync_dict["tar_deletes"].get_item_set()
+
+            for item in src_items:
+                path = pathlib.Path(self.source) / item
+                if path.exists():
+                    intersection4.add(item)
+
+            for item in tar_items:
+                path = pathlib.Path(self.target) / item
+                if path.exists():
+                    intersection4.add(item)
+            
+            intersection_set = intersection_set | intersection4
                 
         if intersection_set:
             src_duplicates = Items(self.source)

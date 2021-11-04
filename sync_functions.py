@@ -39,7 +39,7 @@ def two_way_sync(pair_id, source, target, delete, dry_run, verbose):
 
         LOGGER.debug(f"Time to delete: {round(time() - time_point, 2)}")
 
-    doubles = sync_obj.remove_doubles(delete)
+    doubles = sync_obj.remove_doubles(delete, dry_run)
     if doubles:
         # This happens if dir on one side is added, since last saved state, 
         # simultaneously as file on other side was added.
