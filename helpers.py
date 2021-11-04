@@ -296,10 +296,6 @@ class Syncer:
         self.tar_dict = tar_dict
         # self.state_dict = {} # Created by read_saved_state()
         self.read_saved_state()
-        self.initialize()
-        self.create_new_state_dict()
-
-    def initialize(self):
         self.sync_dict = {
             # Contains strings representing paths (rel to source/tar)
             "upd_lr": set(),
@@ -318,6 +314,7 @@ class Syncer:
 
         self.create_sync_lists()
         self.decide_sync_actions()
+        self.create_new_state_dict()
 
     def create_sync_lists(self):
         def get_dir_list(dir, file_set, new_dir):
@@ -543,56 +540,40 @@ class Syncer:
                 bool(self.sync_dict["add_to_tar"]) or
                 bool(self.sync_dict["add_to_src"]))
 
-    def remove_doubles(self):
+    def remove_doubles(self, deletions_active):
 
-        self.lr_items = self.sync_dict["add_to_tar"].get_item_set()
-        self.rl_items = self.sync_dict["add_to_src"].get_item_set()
-        intersection_set = self.lr_items & self.rl_items
+        lr_additions = self.sync_dict["add_to_tar"].get_item_set()
+        rl_additions = self.sync_dict["add_to_src"].get_item_set()
+        intersection_set = lr_additions & rl_additions
+
+        if not deletions_active:
+            intersections2 = lr_additions & self.sync_dict["tar_deletes"].get_item_set()
+            intersections3 = rl_additions & self.sync_dict["src_deletes"].get_item_set()
+            intersection_set = intersection_set | intersections2 | intersections3
+                
         if intersection_set:
-            duplicates = Items("Duplicate items")
+            src_duplicates = Items(self.source)
+            tar_duplicates = Items(self.target)
             for rel_item in intersection_set:
-                self.lr_items.remove(rel_item)
-                self.rl_items.remove(rel_item)
                 src_item = pathlib.Path(self.source) / rel_item
                 tar_item = pathlib.Path(self.target) / rel_item
 
-                for root, item in ((self.source, src_item), (self.target, tar_item)):
+                for item, dupl_obj in ((src_item, src_duplicates), (tar_item, tar_duplicates)):
                     if item.is_file() or item.is_symlink():
-                        dir = str(pathlib.Path(rel_item).parent)
-                        duplicates.add_file(item)
-                        if root == self.source:
-                            self.src_dict[dir].remove(rel_item)
-                        else:
-                            self.tar_dict[dir].remove(rel_item)
+                        dupl_obj.add_file(item)
                     elif item.is_dir():
-                        duplicates.add_dir(item)
-                        if root == self.source:
-                            del self.src_dict[rel_item]
-                        else:
-                            del self.tar_dict[rel_item]
+                        dupl_obj.add_dir(item)
                     else:
                         LOGGER.error("Duplicate that is neither dir nor file!?")
 
-            # This is costly but necessary since dir on one side can have files
-            # or more dirs inside. Sync structs are not organized to remove
-            # entire dirs. Hence reinitialize is necessary in this rare scenario.
-            self.initialize()
-            self.duplicates = duplicates
-            return self.duplicates
+            return (src_duplicates, tar_duplicates)
 
         return None
 
     def create_textfiles(self):
         # Private method to create textfiles necessary for rsync call.
-        
-        try:
-            lr_items = self.lr_items
-            rl_items = self.rl_items
-        except AttributeError:
-            # Normally remove_doubles will have been called before create_textfiles.
-            self.remove_doubles()
-            lr_items = self.lr_items
-            rl_items = self.rl_items
+        lr_items = self.sync_dict["add_to_tar"].get_item_set() | self.sync_dict["upd_lr"]
+        rl_items = self.sync_dict["add_to_src"].get_item_set() | self.sync_dict["upd_rl"]
 
         config_dir = SCRIPT_PATH / ".folder_sync_config"
         timepoint = round(time())
@@ -606,10 +587,6 @@ class Syncer:
         self.txtfile_rl_path = config_dir / rl_filename
         with self.txtfile_rl_path.open('w') as file_rl:
             file_rl.writelines([line + '\n' for line in rl_items])
-        
-        # Cleanup
-        delattr(self, "lr_items")
-        delattr(self, "rl_items")
         
     def remove_textfiles(self):
         for item in (self.txtfile_lr_path, self.txtfile_rl_path):

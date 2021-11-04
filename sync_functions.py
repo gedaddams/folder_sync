@@ -39,14 +39,17 @@ def two_way_sync(pair_id, source, target, delete, dry_run, verbose):
 
         LOGGER.debug(f"Time to delete: {round(time() - time_point, 2)}")
 
-    doubles = sync_obj.remove_doubles()
+    doubles = sync_obj.remove_doubles(delete)
     if doubles:
         # This happens if dir on one side is added, since last saved state, 
         # simultaneously as file on other side was added.
-        LOGGER.warning(f"The following items could not be synced:\n\n")
-        doubles.print_items()
-        LOGGER.info(f"\nThis most likely depends on file on one side having\
-the same name as dir on the other")
+        LOGGER.critical(f"\nNon identified doubles exists! This most likely \
+depends on file on one side having the same name as dir on the other!")
+        LOGGER.critical(f"Aborting sync manual review of the following items are necessary:\n")
+        doubles[0].print_items()
+        doubles[1].print_items()
+        print()
+        sys.exit(4)
             
     sync_obj.create_textfiles()
     sync_obj.remove_textfiles()
