@@ -615,12 +615,17 @@ class Syncer:
                 except Exception:
                     LOGGER.debug("Couldn't remove textfile")
 
-    def add_added_files_to_state(self, files, sync_returncode):
+    def add_items_to_state(self, items_obj):
         # Adds succesfully added filew to self.new_state_dict
-        # If rsync return successful returncode assumes additions were succesful
-        # Otherwise checks if files exist on both sides
-        # Runs 1 time for each sync direction
-        pass
+        if not isinstance(items_obj, Items):
+            raise TypeError("Argument must be an instance of the Items class")
+        
+        for dir_string in items_obj.dirs:
+            self.new_state_dict[dir_string] = set()
+        
+        for file_path in items_obj.files.values():
+            dir_string = str(file_path.parent)
+            self.new_state_dict[dir_string].add(file_path.name)
     
     def get_new_state_dict(self):
         new_state_dict = {}
@@ -629,25 +634,40 @@ class Syncer:
         
         return new_state_dict
 
-    def __run_rsync(self, rsync_arglist, print_output):
+    def __run_rsync(self, initial_arglist, txt_path, source, target, print_output):
         """Used by sync method to call rsync with rsync_arglist. Will always use
         --from-file and --itemize-changes.
 
         Args:
-            rsync_arglist {list}: list of args for rsync call
+            initial_arglist {list}: list of args for rsync call
+            txt_path  {pathlib.Path}: pathlib.Path instance to txtfile
+            source {string}: string corresponding to rsync source
+            target {string}: string corresponding to rsync target
             print_output {boolean}: Wether to print any output or not
-
         Returns:
             [type]: [description]
         """
-        obj_return = subprocess.run(rsync_arglist, text=True, capture_output=True)
+
+        already_synced = 50
+        from_file_without_valid_filepath = 51
+
+        if txt_path:
+            if not txt_path.exists():
+                return from_file_without_valid_filepath
+            arglist = initial_arglist[:]
+            arglist.append(("--files-from=" + str(txt_path)))
+            arglist.append(source)
+            arglist.append(target)
+        else:
+            return already_synced
+
+        obj_return = subprocess.run(arglist, text=True, capture_output=True)
 
         if obj_return.stdout:
             if print_output:
                 print(format_rsync_output(obj_return.stdout), end="")
         else:
             if not obj_return.stderr:
-                already_synced = 50
                 return already_synced
 
         if obj_return.stderr:
@@ -675,37 +695,36 @@ class Syncer:
             already_synced = 50
             from_file_without_valid_filepath = 51
         """
-        already_synced = 50
-        def call_run_rsync(initial_args, txt_path, source, target):
-            if txt_path:
-                if not txt_path.exists():
-                    from_file_without_valid_filepath = 51
-                    return from_file_without_valid_filepath
-                path_arglist = initial_args[:]
-                path_arglist.append(("--files-from=" + str(txt_path)))
-                path_arglist.append(source)
-                path_arglist.append(target)
-                return self.__run_rsync(path_arglist, print_output)
-            else:
-                return already_synced
         
+        return_values = []
         self.create_textfiles()
         arglist = ["rsync", "-a", "--itemize-changes"]
         if dryrun:
             arglist.append("--dry-run")
 
-        return_values = []
-        return_values.append(call_run_rsync(arglist, self.txtfile_lr, self.source, self.target))
-        return_values.append(call_run_rsync(arglist, self.txtfile_rl, self.target, self.source))
-        tar_adds_return = call_run_rsync(arglist, self.txtfile_tar_adds, self.source, self.target)
-        src_adds_return = call_run_rsync(arglist, self.txtfile_src_adds, self.target, self.source)
-        
-        if tar_adds_return in {0, 50} and self.txtfile_tar_adds:
-            # TODO add items to new_state_dict
+        return_values.append(self.__run_rsync(arglist, self.txtfile_lr,
+                            self.source, self.target, print_output))
+        return_values.append(self.__run_rsync(arglist, self.txtfile_rl,
+                            self.target, self.source, print_output))
+
+        tar_adds_return = self.__run_rsync(arglist, self.txtfile_tar_adds,
+                            self.source, self.target, print_output)
+        if tar_adds_return == 0:
+            self.add_items_to_state(self.sync_dict["add_to_tar"])
+        elif tar_adds_return == 50:
+            pass # Now additions necessary
+        else:
+            # TODO how to handle erroneus additions? Maybe add logic outside of class (sync_functions?)
             pass
 
-        if src_adds_return in {0, 50} and self.txtfile_src_adds:
-            # TODO add items to new_state_dict
+        src_adds_return = self.__run_rsync(arglist, self.txtfile_src_adds,
+                            self.target, self.source, print_output)
+        if src_adds_return == 0:
+            self.add_items_to_state(self.sync_dict["add_to_src"])
+        elif src_adds_return == 50:
+            pass # Now additions necessary
+        else:
+            # TODO how to handle erroneus additions? Maybe add logic outside of class (sync_functions?)
             pass
 
         return_values.append(tar_adds_return)

@@ -1,1 +1,1 @@
-{"source": "/home/ged/Documents/testdir/", "target": "/home/ged/Documents/testdir_copy/", "id": 17, "items": {".": ["dirfile"], "innerdir": []}}
+{"source": "/home/ged/Documents/testdir/", "target": "/home/ged/Documents/testdir_copy/", "id": 17, "items": {".": ["newfile", "newest_file"], "inner_right": ["inner_right_file"], "innerdir": ["innerfile"]}}
