@@ -74,7 +74,6 @@ def delete_and_sync(sync_obj):
     sync_obj.sync()
 
 
-
 def create_file_dict(top_directory, excl_obj=None):
     """Uses os.walk to go through top_directory including subdirectory to
     create file_dict. 
