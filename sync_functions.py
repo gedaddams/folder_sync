@@ -43,16 +43,15 @@ def two_way_sync(pair_id, source, target, delete, dry_run, verbose):
     if doubles:
         # This happens if dir on one side is added, since last saved state, 
         # simultaneously as file on other side was added.
-        LOGGER.critical(f"\nNon identified doubles exists! This most likely \
-depends on file on one side having the same name as dir on the other!")
-        LOGGER.critical(f"Aborting sync manual review of the following items are necessary:\n")
+        LOGGER.critical("\nNon identified doubles exists! This most likely" +
+        "depends on file on one side having the same name as dir on the other!")
+        LOGGER.critical("Aborting sync manual review of the following items are necessary:\n")
         doubles[0].print_items()
         doubles[1].print_items()
         print()
         sys.exit(4)
             
-    sync_obj.create_textfiles()
-    sync_obj.remove_textfiles()
+    sync_obj.sync(dry_run, verbose)
     
     state_dict = sync_obj.get_new_state_dict()
     save_folder_state(source, target, state_dict, pair_id)

@@ -549,10 +549,10 @@ class Syncer:
         intersections2 = lr_additions & self.sync_dict["tar_deletes"].get_item_set()
         intersections3 = rl_additions & self.sync_dict["src_deletes"].get_item_set()
 
-        if not deletions_active or dryrun:
+        if not deletions_active:
             intersection_set = intersection_set | intersections2 | intersections3
-        elif intersections2 or intersections3:
-            # TODO Make sure items no longer exists (deletions succesful)
+        elif (intersections2 or intersections3) and not dryrun:
+            # Deletions should be performed!
             intersection4 = set()
             src_items = self.sync_dict["src_deletes"].get_item_set()
             tar_items = self.sync_dict["tar_deletes"].get_item_set()
@@ -590,32 +590,30 @@ class Syncer:
 
     def create_textfiles(self):
         # Private method to create textfiles necessary for rsync call.
-        lr_items = self.sync_dict["add_to_tar"].get_item_set() | self.sync_dict["upd_lr"]
-        rl_items = self.sync_dict["add_to_src"].get_item_set() | self.sync_dict["upd_rl"]
-
         config_dir = SCRIPT_PATH / ".folder_sync_config"
+
+        def create_file_and_attr(sync_dict, prp_name, file_name):
+            if sync_dict:
+                setattr(self, prp_name, (config_dir / file_name))
+                with getattr(self, prp_name).open("w") as the_file:
+                    the_file.writelines([line + '\n' for line in sync_dict])
+            else:
+                setattr(self, prp_name, None)
+
         timepoint = round(time())
-        lr_filename = f"lr_sync_{timepoint}.tmp"
-        rl_filename = f"rl_sync_{timepoint}.tmp"
+        create_file_and_attr(self.sync_dict["upd_lr"], "txtfile_lr", f"lr_sync_{timepoint}.tmp")
+        create_file_and_attr(self.sync_dict["upd_rl"], "txtfile_rl", f"rl_sync_{timepoint}.tmp")
+        create_file_and_attr(self.sync_dict["add_to_tar"].get_item_set(), "txtfile_tar_adds", f"tar_adds_{timepoint}.tmp")
+        create_file_and_attr(self.sync_dict["add_to_src"].get_item_set(), "txtfile_src_adds", f"src_adds_{timepoint}.tmp")
 
-        self.txtfile_lr_path = config_dir / lr_filename
-        with self.txtfile_lr_path.open('w') as file_lr:
-            file_lr.writelines([line + '\n' for line in lr_items])
-
-        self.txtfile_rl_path = config_dir / rl_filename
-        with self.txtfile_rl_path.open('w') as file_rl:
-            file_rl.writelines([line + '\n' for line in rl_items])
-        
     def remove_textfiles(self):
-        for item in (self.txtfile_lr_path, self.txtfile_rl_path):
-            try:
-                item.unlink()
-            except Exception:
-                # No action needed
-                pass
-
-    def sync(self):
-        pass
+        for item in (self.txtfile_lr, self.txtfile_rl, self.txtfile_tar_adds, 
+                    self.txtfile_src_adds):
+            if item:
+                try:
+                    item.unlink()
+                except Exception:
+                    LOGGER.debug("Couldn't remove textfile")
 
     def add_added_files_to_state(self, files, sync_returncode):
         # Adds succesfully added filew to self.new_state_dict
@@ -631,6 +629,89 @@ class Syncer:
         
         return new_state_dict
 
+    def __run_rsync(self, rsync_arglist, print_output):
+        """Used by sync method to call rsync with rsync_arglist. Will always use
+        --from-file and --itemize-changes.
+
+        Args:
+            rsync_arglist {list}: list of args for rsync call
+            print_output {boolean}: Wether to print any output or not
+
+        Returns:
+            [type]: [description]
+        """
+        obj_return = subprocess.run(rsync_arglist, text=True, capture_output=True)
+
+        if obj_return.stdout:
+            if print_output:
+                print(format_rsync_output(obj_return.stdout), end="")
+        else:
+            if not obj_return.stderr:
+                already_synced = 50
+                return already_synced
+
+        if obj_return.stderr:
+            # TODO maybe write to logfile if print_output=False
+            print(obj_return.stderr)
+
+        if not obj_return.returncode == 0:
+            # TODO maybe write to logfile if print_output=False
+            print("Something went wrong in rsync call!")
+
+        return obj_return.returncode
+
+    def sync(self, dryrun=False, print_output=True):
+        """Summary: Sync files in lr_items and rl_items using rsync as subprocess.
+        Requires internal variables
+
+        Args:
+            delete {bool}: Wether to delete files in target that doesnt exist in source.
+            dryrun {bool}: If true run rsync ones with --dry-run flag. If true ignores user_interaction=True.
+            prin_output {bool}: If true prints output.
+        
+        Returns:
+            Most often propagates returncode from rsync call itself.
+            Below are implementations specific return codes:
+            already_synced = 50
+            from_file_without_valid_filepath = 51
+        """
+        already_synced = 50
+        def call_run_rsync(initial_args, txt_path, source, target):
+            if txt_path:
+                if not txt_path.exists():
+                    from_file_without_valid_filepath = 51
+                    return from_file_without_valid_filepath
+                path_arglist = initial_args[:]
+                path_arglist.append(("--files-from=" + str(txt_path)))
+                path_arglist.append(source)
+                path_arglist.append(target)
+                return self.__run_rsync(path_arglist, print_output)
+            else:
+                return already_synced
+        
+        self.create_textfiles()
+        arglist = ["rsync", "-a", "--itemize-changes"]
+        if dryrun:
+            arglist.append("--dry-run")
+
+        return_values = []
+        return_values.append(call_run_rsync(arglist, self.txtfile_lr, self.source, self.target))
+        return_values.append(call_run_rsync(arglist, self.txtfile_rl, self.target, self.source))
+        tar_adds_return = call_run_rsync(arglist, self.txtfile_tar_adds, self.source, self.target)
+        src_adds_return = call_run_rsync(arglist, self.txtfile_src_adds, self.target, self.source)
+        
+        if tar_adds_return in {0, 50} and self.txtfile_tar_adds:
+            # TODO add items to new_state_dict
+            pass
+
+        if src_adds_return in {0, 50} and self.txtfile_src_adds:
+            # TODO add items to new_state_dict
+            pass
+
+        return_values.append(tar_adds_return)
+        return_values.append(src_adds_return)
+        self.remove_textfiles()
+        return return_values
 
 class Syncer_old:
     
