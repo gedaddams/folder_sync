@@ -53,8 +53,9 @@ def two_way_sync(pair_id, source, target, delete, dry_run, verbose):
             
     sync_obj.sync(dry_run, verbose)
     
-    state_dict = sync_obj.get_new_state_dict()
-    save_folder_state(source, target, state_dict, pair_id)
+    if not dry_run:
+        state_dict = sync_obj.get_new_state_dict()
+        save_folder_state(source, target, state_dict, pair_id)
 
     # TODO Remove only for testing
     return
