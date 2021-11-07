@@ -11,7 +11,7 @@ import json
 
 LOGGER = logging.getLogger(__name__)
 
-def two_way_sync(pair_id, source, target, delete, dry_run, verbose):
+def two_way_sync(pair_id, source, target, delete, dry_run, verbose, interactive=True):
 
     start_time = time()
     
@@ -31,11 +31,33 @@ def two_way_sync(pair_id, source, target, delete, dry_run, verbose):
                 delete, dry_run, verbose)
     LOGGER.debug(f"Time to create Syncer {round(time() - time_point, 2)}")
     
-    if delete:
-        time_point = time()
-        sync_obj.delete()
+    if interactive:
+        sync_obj.dryrun = True
+        delete_and_sync(sync_obj)
+        user_input = ""
+        while not user_input in {"y", "yes", "n", "no"}:
+            user_input = input(f"\nThis was only a trial run. Do you want to sync for real? (y/yes, n/no)\n--> ")
+            user_input = user_input.lower() 
+        if user_input in {"y", "yes"}:
+            sync_obj.dryrun = False
+            delete_and_sync(sync_obj)
 
-        LOGGER.debug(f"Time to delete: {round(time() - time_point, 2)}")
+    else: # If not interactive mode only delete and sync once
+        delete_and_sync(sync_obj)
+    
+    sync_obj.remove_textfiles()
+    
+    if not sync_obj.dryrun:
+        state_dict = sync_obj.get_new_state_dict()
+        save_folder_state(source, target, state_dict, pair_id)
+
+    return
+    
+
+def delete_and_sync(sync_obj):
+    time_point = time()
+    sync_obj.delete()
+    LOGGER.debug(f"Time to delete: {round(time() - time_point, 2)}")
 
     doubles = sync_obj.remove_doubles()
     if doubles:
@@ -50,13 +72,8 @@ def two_way_sync(pair_id, source, target, delete, dry_run, verbose):
         sys.exit(4)
             
     sync_obj.sync()
-    
-    if not dry_run:
-        state_dict = sync_obj.get_new_state_dict()
-        save_folder_state(source, target, state_dict, pair_id)
 
-    return
-    
+
 
 def create_file_dict(top_directory, excl_obj=None):
     """Uses os.walk to go through top_directory including subdirectory to

@@ -531,12 +531,13 @@ class Syncer:
                 print(f"Deleting directory (dryrun): {path}")
             
     def delete(self):
-        if self.dryrun:
-            self.dryrun_delete_files()
-            self.dryrun_delete_dirs()
-        else:
-            self.delete_files()
-            self.delete_dirs()
+        if self.delete:
+            if self.dryrun:
+                self.dryrun_delete_files()
+                self.dryrun_delete_dirs()
+            else:
+                self.delete_files()
+                self.delete_dirs()
 
     def sync_necessary(self):
         return (bool(self.sync_dict["upd_lr"]) or 
@@ -748,7 +749,5 @@ class Syncer:
                     break
             if not has_synced:
                 LOGGER.info("No additions or updates necessary. Folders are in sync!")
-        
-        self.remove_textfiles()
 
         return return_values

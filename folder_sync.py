@@ -2,7 +2,6 @@
 import argparse
 import os
 import logging
-import sqlite3
 import sys
 import sync_functions
 import db_helpers
@@ -22,14 +21,15 @@ def main():
 
         if len(sys.argv) > 1:
             # Getting, controlling and adjusting arguments!
-            source, target, delete, dry_run, verbose = get_arguments()
+            source, target, delete, dry_run, verbose, interactive = get_arguments()
             check_arguments(source, target)
             source = db_helpers.adjust_dirname(source)
             target = db_helpers.adjust_dirname(target)
             pair_id = db_helpers.get_folder_pair_id(cur, source, target)
             #if True:
             if pair_id:
-                sync_functions.two_way_sync(pair_id, source, target, delete, dry_run, verbose)                    
+                sync_functions.two_way_sync(pair_id, source, target, delete, 
+                                            dry_run, verbose, interactive)
             else:
                 if dry_run:
                     print("Dry run not possible when syncing folder pair for the first time. Even without the '-n' flag dryrun will run once (you can abort) when setting up!")
@@ -109,13 +109,15 @@ def get_arguments():
     parser.add_argument("-d", "--delete", dest="delete", default="False", help="set to true to enable deletions", required=False)
     parser.add_argument("-n", "--dry-run", dest="dry_run", default="False", help="set to true to do dryrun", required=False)
     parser.add_argument("-v", "--verbose", dest="verbose", default="True", help="set to false to sync without output", required=False)
+    parser.add_argument("-i", "--interactive", dest="interactive", default="True", help="True --> syncs twice (first time = dryrun). Can abort after dryrun", required=False)
     options = parser.parse_args()
     source_dir = options.source_dir
     target_dir = options.target_dir
     deletions_enabled = True if (options.delete.lower() == "true") else False
     dry_run = False if (options.dry_run.lower() == "false") else True
     verbose = False if (options.verbose.lower() == "false") else True
-    return source_dir, target_dir, deletions_enabled, dry_run, verbose
+    interactive = False if (options.interactive.lower() == "false") else True
+    return source_dir, target_dir, deletions_enabled, dry_run, verbose, interactive
 
 
 if __name__ == "__main__":
