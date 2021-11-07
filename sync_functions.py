@@ -27,19 +27,17 @@ def two_way_sync(pair_id, source, target, delete, dry_run, verbose):
     LOGGER.debug(f"Time for create_file_dicts {round(time() - time_point, 2)}")
     time_point = time()
     
-    sync_obj = Syncer(pair_id, source, target, source_files, target_files)
+    sync_obj = Syncer(pair_id, source, target, source_files, target_files,
+                delete, dry_run, verbose)
     LOGGER.debug(f"Time to create Syncer {round(time() - time_point, 2)}")
     
     if delete:
         time_point = time()
-        if dry_run:
-            sync_obj.dryrun_delete()
-        else:
-            sync_obj.delete()
+        sync_obj.delete()
 
         LOGGER.debug(f"Time to delete: {round(time() - time_point, 2)}")
 
-    doubles = sync_obj.remove_doubles(delete, dry_run)
+    doubles = sync_obj.remove_doubles()
     if doubles:
         # This happens if dir on one side is added, since last saved state, 
         # simultaneously as file on other side was added.
@@ -51,80 +49,13 @@ def two_way_sync(pair_id, source, target, delete, dry_run, verbose):
         print()
         sys.exit(4)
             
-    sync_obj.sync(dry_run, verbose)
+    sync_obj.sync()
     
     if not dry_run:
         state_dict = sync_obj.get_new_state_dict()
         save_folder_state(source, target, state_dict, pair_id)
 
-    # TODO Remove only for testing
     return
-
-    sync_obj, del_src_obj, del_tar_obj = \
-        create_sync_objects(source, target, source_files, target_files, pair_id)
-
-    time_point = time()
-
-    # DOES THE DELETIONS
-    has_deleted = False
-    if not del_src_obj.is_empty() or not del_tar_obj.is_empty():
-        if delete and not dry_run:
-            print()
-            del_src_obj.delete_items()
-            has_deleted = True
-            del_tar_obj.delete_items()
-        elif delete and dry_run:
-            print("\nTHE FOLLOWING ITEMS WOULD HAVE BEEN DELETED!: (dry run)\n")
-            del_src_obj.dryrun_delete_items()
-            del_tar_obj.dryrun_delete_items()
-        LOGGER.debug(f"Time for deleting {round(time() - time_point)}")
-    else:
-        if delete and verbose:
-            print("\nTHERE ARE NO ITEMS TO DELETE!")
-
-    # RETURNS IF sync_obj IS EMPTY AND NO DELETIONS HAS OCCURED!
-    if sync_obj.is_empty():
-        if delete and not has_deleted:
-            print("\nFOLDERS ARE COMPLETELY IN SYNC!\n")
-            return
-        elif not delete:
-            print("\nFOLDERS ARE ALREADY IN SYNC! (at least with deletions deactivated)\n")
-            return
-    
-    # Checks that same path doesnt exist both in lr_set and rl_set which could
-    # happen if file exists on one side with same name as dir on other side.
-    time_point = time()
-    sync_obj.remove_intersection(verbose)
-    LOGGER.debug(f"Time for intersection testing: {round(time() - time_point, 2)}")
-    
-    if dry_run and verbose:
-        # Function ends before this if sync object is empty, see above!
-        print("\nTHE FOLLOWING ITEMS WOULD HAVE BEEN UPDATED/CREATED!: (dry run)")
-        
-    # SYNCS AND CHECKS RETURN CODES
-    return_src_to_tar, return_tar_to_src = sync_obj.sync(False, dry_run, verbose)
-    ok_exit_codes = {0, 49, 50} # O = OK, 49 = aborted by user, 50 = already synced
-    print() # Newline needed!
-    if verbose and return_src_to_tar in ok_exit_codes and return_tar_to_src in ok_exit_codes:
-        print("Two-way-syncing completed without error!")
-    elif verbose:
-        print("Two-way-sync encountered an error!")
-        
-    # Gets items that should be saved to json.file
-    time_point = time()
-    item_dict = get_existing_items(source, target, del_src_obj, del_tar_obj)
-    LOGGER.debug(f"Time for get_existing_items: {round(time() - time_point, 2)}")
-
-    time_point = time()
-    if save_folder_state(source, target, item_dict, pair_id) == 0:
-        if verbose:
-            print("\nSuccesfully saved folder state!")
-    else:
-        if verbose:
-            print(f"\nCouldn't save folder state. Folder pair will have to be reinitialized before next sync!")
-
-    LOGGER.debug(f"Time for saving folder state: {round(time() - time_point, 2)}")
-    LOGGER.debug(f"Total time elapsed: {round(time() - start_time, 2)}")
     
 
 def create_file_dict(top_directory, excl_obj=None):
@@ -167,100 +98,6 @@ def create_file_dict(top_directory, excl_obj=None):
 
     os.chdir(working_dir)
     return file_dict
-
-
-def create_sync_objects(source, target, src_files, tar_files, pair_id):
-    dirs, files = set(), set()
-
-    def get_saved_items():
-        json_filepath = get_json_path(pair_id)
-        with open(json_filepath, "r") as json_file:
-            state_dict = json.load(json_file)
-        for dir in state_dict["items"]:
-            dirs.add(dir)
-            for item in state_dict["items"][dir]:
-                files.add(os.path.join(dir, item))
-        
-        dirs.discard("")
-        return
-
-    def dir_existed(a_dir):
-        return a_dir in dirs
-
-    def file_existed(a_file):
-        return a_file in files
-
-    def add_or_delete_item(a_file, add_set, del_obj):
-        if file_existed(a_file):
-            del_obj.files.add(a_file)
-        else:
-            add_set.add(a_file)
-
-    def add_or_delete_folder(root_path, dict_of_files_in_root, add_set, 
-        del_obj):
-        # Note that function handles adding and deletions differently since
-        # there is a need to seperate files and dirs for deletions but not for adding.
-        # Checks if folder existed in previous sync
-        if dir_existed(root_path):
-            del_obj.dirs.add(root_path)
-            choosen_set = del_obj.files_in_deleted_dirs
-        else:
-            add_set.add(root_path)
-            choosen_set = add_set
-
-        for item in dict_of_files_in_root:
-            choosen_set.add(item)
-
-    get_saved_items()
-    del_src, del_tar = Deleter(source), Deleter(target) 
-    sync_obj = Syncer(source, target)
-    left_to_right, right_to_left = sync_obj.lr_items, sync_obj.rl_items 
-
-    # Loop through all keys in src_files. Root corresponds to existing dirs
-    for root in src_files:
-        basedir_src = src_files[root]
-        if root in tar_files:
-            # Current root (dir) exist both in source and target!
-            basedir_tar = tar_files[root]
-            # Loop through all files in dir
-            for item in basedir_src:
-                if item in basedir_tar:
-                    # File in both source and target! Compare files.
-                    srcfile_path = os.path.join(source, item)
-                    tarfile_path = os.path.join(target, item)
-                    mod_time_srcfile = (os.lstat(srcfile_path)).st_mtime
-                    mod_time_tarfile = (os.lstat(tarfile_path)).st_mtime
-                    date_diff = mod_time_srcfile - mod_time_tarfile 
-
-                    # TODO floating point arithmetics might cause errors. Rethink.
-                    if date_diff > 0:
-                        left_to_right.add(item)
-                    elif date_diff < 0:
-                        right_to_left.add(item)
-
-                    # Delete key from target dict
-                    basedir_tar.remove(item)
-                else: 
-                    # File only in source not in target
-                    add_or_delete_item(item, left_to_right, del_src)
-                    
-            # Checks if there are files exclusive to target (not in source)
-            for item in basedir_tar:
-                add_or_delete_item(item, right_to_left, del_tar)
-            # delete key corresponding to root from tar_files
-            del tar_files[root]
-
-        else:
-            # root exists in source but not in target
-            add_or_delete_folder(root, basedir_src, left_to_right, 
-            del_src)
-
-    # Only remaining roots in tar_files exists only in target (not in source).
-    for root in tar_files:
-        add_or_delete_folder(root, tar_files[root], right_to_left, 
-        del_tar)
-
-    return sync_obj, del_src, del_tar
 
 
 def get_existing_items(source, target, del_obj_src=None, del_obj_tar=None):
@@ -371,122 +208,3 @@ def rsync(source, target, delete=False, dryrun=False, print_output=True, user_in
         rsync_arglist.append("--dry-run")
 
     return run_rsync(rsync_arglist)
-
-
-def create_file_dict_old(top_directory):
-    """Uses os.walk to go through top_directory including subdirectory to
-    create file_dict. 
-    - file_dict uses root directory (path relative
-    to top_directory) as key and has inner_dict as value. 
-
-    Args:
-        top_directory {string}: path to top directory. Can be relative or absolute.
-
-    Returns:
-        file_dict {dictionary}: see above
-    """
-
-    top_directory = os.path.abspath(top_directory)
-    working_dir = os.getcwd()
-    os.chdir(top_directory)
-    file_dict = {}
-    first_dir = True
-
-    for basedir, folders, files in os.walk(top_directory):
-        if not first_dir:
-            basedir = os.path.relpath(basedir,top_directory)
-        else:
-            basedir = ""
-            first_dir = False
-
-        file_dict[basedir] = set()
-        files_in_basedir = file_dict[basedir]
-        for a_file in files:
-            rel_file_path = os.path.join(basedir, a_file)
-            files_in_basedir.add(rel_file_path)
-        
-        for a_dir in folders:
-            rel_file_path = os.path.join(basedir, a_dir)
-            if os.path.islink(rel_file_path):
-                files_in_basedir.add(rel_file_path)
-
-    os.chdir(working_dir)
-    return file_dict
-
-
-def two_way_sync_old(pair_id, source, target, delete, dry_run, verbose):
-    # TODO Add some kind of ignore list. ex .tmp files should be ignored.
-
-    start_time = time()
-    source_files = create_file_dict(source)
-    LOGGER.debug(f"Time for create_file_dict 1 {round(time() - start_time, 2)}")
-    time_point = time()
-    target_files = create_file_dict(target)
-    LOGGER.debug(f"Time for create_file_dict 2 {round(time() - time_point, 2)}")
-    time_point = time()
-    sync_obj, del_src_obj, del_tar_obj = \
-        create_sync_objects(source, target, source_files, target_files, pair_id)
-    LOGGER.debug(f"Time for create_sync_sets {round(time() - time_point, 2)}")
-    #LOGGER.debug(f"lr list: {lr_set}\nrl list: {rl_set}\ndel src list: {del_src_obj}\ndel tar list: {del_tar_obj}")
-
-    # DOES THE DELETIONS
-    has_deleted = False
-    if not del_src_obj.is_empty() or not del_tar_obj.is_empty():
-        time_point = time()
-        if delete and not dry_run:
-            print()
-            del_src_obj.delete_items()
-            has_deleted = True
-            del_tar_obj.delete_items()
-        elif delete and dry_run:
-            print("\nTHE FOLLOWING ITEMS WOULD HAVE BEEN DELETED!: (dry run)\n")
-            del_src_obj.dryrun_delete_items()
-            del_tar_obj.dryrun_delete_items()
-        LOGGER.debug(f"Time for deleting {round(time() - time_point)}")
-    else:
-        if delete and verbose:
-            print("\nTHERE ARE NO ITEMS TO DELETE!")
-
-    # RETURNS IF sync_obj IS EMPTY AND NO DELETIONS HAS OCCURED!
-    if sync_obj.is_empty():
-        if delete and not has_deleted:
-            print("\nFOLDERS ARE COMPLETELY IN SYNC!\n")
-            return
-        elif not delete:
-            print("\nFOLDERS ARE ALREADY IN SYNC! (at least with deletions deactivated)\n")
-            return
-    
-    # Checks that same path doesnt exist both in lr_set and rl_set which could
-    # happen if file exists on one side with same name as dir on other side.
-    time_point = time()
-    sync_obj.remove_intersection(verbose)
-    LOGGER.debug(f"Time for intersection testing: {round(time() - time_point, 2)}")
-    
-    if dry_run and verbose:
-        # Function ends before this if sync object is empty, see above!
-        print("\nTHE FOLLOWING ITEMS WOULD HAVE BEEN UPDATED/CREATED!: (dry run)")
-        
-    # SYNCS AND CHECKS RETURN CODES
-    return_src_to_tar, return_tar_to_src = sync_obj.sync(False, dry_run, verbose)
-    ok_exit_codes = {0, 49, 50} # O = OK, 49 = aborted by user, 50 = already synced
-    print() # Newline needed!
-    if verbose and return_src_to_tar in ok_exit_codes and return_tar_to_src in ok_exit_codes:
-        print("Two-way-syncing completed without error!")
-    elif verbose:
-        print("Two-way-sync encountered an error!")
-        
-    # Gets items that should be saved to json.file
-    time_point = time()
-    item_dict = get_existing_items(source, target, del_src_obj, del_tar_obj)
-    LOGGER.debug(f"Time for get_existing_items: {round(time() - time_point, 2)}")
-
-    time_point = time()
-    if save_folder_state(source, target, item_dict, pair_id) == 0:
-        if verbose:
-            print("\nSuccesfully saved folder state!")
-    else:
-        if verbose:
-            print(f"\nCouldn't save folder state. Folder pair will have to be reinitialized before next sync!")
-
-    LOGGER.debug(f"Time for saving folder state: {round(time() - time_point, 2)}")
-    LOGGER.debug(f"Total time elapsed: {round(time() - start_time, 2)}")

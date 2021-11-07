@@ -288,12 +288,16 @@ class Syncer:
 
     """
 
-    def __init__(self, pair_id, source, target, src_dict, tar_dict):
+    def __init__(self, pair_id, source, target, src_dict, tar_dict, deletions, dryrun, print_output):
         self.id = pair_id
         self.source = source
         self.target = target
         self.src_dict = src_dict
         self.tar_dict = tar_dict
+        self.deletions = deletions
+        self.dryrun = dryrun
+        self.print_output = print_output
+        self.textfiles_created = False
         # self.state_dict = {} # Created by read_saved_state()
         self.read_saved_state()
         self.sync_dict = {
@@ -527,12 +531,12 @@ class Syncer:
                 print(f"Deleting directory (dryrun): {path}")
             
     def delete(self):
-        self.delete_files()
-        self.delete_dirs()
-    
-    def dryrun_delete(self):
-        self.dryrun_delete_files()
-        self.dryrun_delete_dirs()
+        if self.dryrun:
+            self.dryrun_delete_files()
+            self.dryrun_delete_dirs()
+        else:
+            self.delete_files()
+            self.delete_dirs()
 
     def sync_necessary(self):
         return (bool(self.sync_dict["upd_lr"]) or 
@@ -540,7 +544,7 @@ class Syncer:
                 bool(self.sync_dict["add_to_tar"]) or
                 bool(self.sync_dict["add_to_src"]))
 
-    def remove_doubles(self, deletions_active, dryrun):
+    def remove_doubles(self):
 
         lr_additions = self.sync_dict["add_to_tar"].get_item_set()
         rl_additions = self.sync_dict["add_to_src"].get_item_set()
@@ -549,9 +553,9 @@ class Syncer:
         intersections2 = lr_additions & self.sync_dict["tar_deletes"].get_item_set()
         intersections3 = rl_additions & self.sync_dict["src_deletes"].get_item_set()
 
-        if not deletions_active:
+        if not self.deletions:
             intersection_set = intersection_set | intersections2 | intersections3
-        elif (intersections2 or intersections3) and not dryrun:
+        elif (intersections2 or intersections3) and not self.dryrun:
             # Deletions should be performed!
             intersection4 = set()
             src_items = self.sync_dict["src_deletes"].get_item_set()
@@ -634,7 +638,7 @@ class Syncer:
         
         return new_state_dict
 
-    def __run_rsync(self, initial_arglist, txt_path, source, target, print_output):
+    def __run_rsync(self, initial_arglist, txt_path, source, target):
         """Used by sync method to call rsync with rsync_arglist. Will always use
         --from-file and --itemize-changes.
 
@@ -664,7 +668,7 @@ class Syncer:
         obj_return = subprocess.run(arglist, text=True, capture_output=True)
 
         if obj_return.stdout:
-            if print_output:
+            if self.print_output:
                 print(format_rsync_output(obj_return.stdout), end="")
         else:
             if not obj_return.stderr:
@@ -680,7 +684,7 @@ class Syncer:
 
         return obj_return.returncode
 
-    def sync(self, dryrun=False, print_output=True):
+    def sync(self):
         """Summary: Sync files in lr_items and rl_items using rsync as subprocess.
         Requires internal variables
 
@@ -696,212 +700,55 @@ class Syncer:
             from_file_without_valid_filepath = 51
         """
         
+        if not self.textfiles_created:
+            self.create_textfiles()
+            self.textfiles_created = True
+
         return_values = []
-        self.create_textfiles()
         arglist = ["rsync", "-a", "--itemize-changes"]
-        if dryrun:
+
+        if self.dryrun:
             arglist.append("--dry-run")
 
+        # These lines calls rsync 4 times.
         return_values.append(self.__run_rsync(arglist, self.txtfile_lr,
-                            self.source, self.target, print_output))
+                            self.source, self.target))
         return_values.append(self.__run_rsync(arglist, self.txtfile_rl,
-                            self.target, self.source, print_output))
-
+                            self.target, self.source))
         tar_adds_return = self.__run_rsync(arglist, self.txtfile_tar_adds,
-                            self.source, self.target, print_output)
-        if tar_adds_return == 0:
-            self.add_items_to_state(self.sync_dict["add_to_tar"])
-        elif tar_adds_return == 50:
-            pass # Now additions necessary
-        else:
-            # TODO how to handle erroneus additions? Maybe add logic outside of class (sync_functions?)
-            pass
-
+                            self.source, self.target)
         src_adds_return = self.__run_rsync(arglist, self.txtfile_src_adds,
-                            self.target, self.source, print_output)
-        if src_adds_return == 0:
-            self.add_items_to_state(self.sync_dict["add_to_src"])
-        elif src_adds_return == 50:
-            pass # Now additions necessary
-        else:
-            # TODO how to handle erroneus additions? Maybe add logic outside of class (sync_functions?)
-            pass
+                            self.target, self.source)
 
         return_values.append(tar_adds_return)
         return_values.append(src_adds_return)
-        self.remove_textfiles()
-        return return_values
 
-class Syncer_old:
-    
-    def __init__(self, src_root, tar_root) -> None:
-        # lr = left-to-right
-        # rl = right-to-left
-        # src = source
-        # tar = target
-        
-        self.src_root = src_root
-        self.tar_root = tar_root
-        self.lr_items = set()
-        self.rl_items = set()
-        self.duplicates = set()
-        self.__txtfile_lr_path = ""
-        self.__txtfile_rl_path = ""
-        
-    def __create_textfiles(self):
-        # Private method to create textfiles necessary for rsync call.
-        config_dir = SCRIPT_PATH / "./folder_sync_config"
-
-        self.__txtfile_lr_path = config_dir / "lr_sync.tmp"
-        with self.__txtfile_lr_path.open('w') as file_lr:
-            file_lr.writelines([line + '\n' for line in self.lr_items])
-
-        self.__txtfile_rl_path = config_dir / "rl_sync.tmp"
-        with self.__txtfile_rl_path.open('w') as file_rl:
-            file_rl.writelines([line + '\n' for line in self.rl_items])
-        
-    def __delete_textfiles(self):
-        for item in [self.__txtfile_lr_path, self.__txtfile_rl_path]:
-            try:
-                os.unlink(item)
-            except Exception:
-                # No action needed
+        if not self.dryrun:
+            if tar_adds_return == 0:
+                self.add_items_to_state(self.sync_dict["add_to_tar"])
+            elif tar_adds_return == 50:
+                pass # No additions necessary
+            else:
+                # TODO how to handle erroneus additions? Maybe add logic outside of class (sync_functions?)
                 pass
+
+            if src_adds_return == 0:
+                self.add_items_to_state(self.sync_dict["add_to_src"])
+            elif src_adds_return == 50:
+                pass # No additions necessary
+            else:
+                # TODO how to handle erroneus additions? Maybe add logic outside of class (sync_functions?)
+                pass
+
+        if self.print_output:
+            has_synced = False
+            for value in return_values:
+                if value != 50:
+                    has_synced = True
+                    break
+            if not has_synced:
+                LOGGER.info("No additions or updates necessary. Folders are in sync!")
         
-    def is_empty(self):
-        return not self.lr_items and not self.rl_items
-        
-    def remove_intersection(self, verbose=False):
-        # TODO
-        intersection_set = self.lr_items.intersection(self.rl_items)
-        if intersection_set:
-            for item in intersection_set:
-                self.lr_items.remove(item)
-                self.rl_items.remove(item)
-                self.duplicates.add(item)
-        if verbose and intersection_set:    
-            print(f"Intersection of sync sets {intersection_set}")
+        self.remove_textfiles()
 
-    def __run_rsync(self, rsync_arglist, print_output):
-        """Used by sync method to call rsync with rsync_arglist. Will always use
-        --from-file and --itemize-changes.
-
-        Args:
-            rsync_arglist {list}: list of args for rsync call
-            print_output {boolean}: Wether to print any output or not
-
-        Returns:
-            [type]: [description]
-        """
-        obj_return = subprocess.run(rsync_arglist, text=True, capture_output=True)
-
-        if obj_return.stdout:
-            if print_output:
-                print(format_rsync_output(obj_return.stdout), end="")
-        else:
-            if not obj_return.stderr:
-                already_synced = 50
-                return already_synced
-
-        if obj_return.stderr:
-            # TODO maybe write to logfile if print_output=False
-            print(obj_return.stderr)
-
-        if not obj_return.returncode == 0:
-            # TODO maybe write to logfile if print_output=False
-            print("Something went wrong in rsync call!")
-
-        return obj_return.returncode
-
-    def sync(self, delete=False, dryrun=False, print_output=True):
-        """Summary: Sync files in lr_items and rl_items using rsync as subprocess.
-        Requires internal variables
-
-        Args:
-            delete {bool}: Wether to delete files in target that doesnt exist in source.
-            dryrun {bool}: If true run rsync ones with --dry-run flag. If true ignores user_interaction=True.
-            prin_output {bool}: If true prints output.
-        
-        Returns:
-            Most often propagates returncode from rsync call itself.
-            Below are implementations specific return codes:
-            already_synced = 50
-            textfiles_not_set = 52
-            from_file_without_valid_filepath = 51
-        """
-        
-        self.__create_textfiles()
-
-        # ERROR CHECKING START
-        if not self.__txtfile_lr_path and self.__txtfile_rl_path:
-            textfiles_not_set = 52
-            return textfiles_not_set
-        
-        if not os.path.isfile(self.__txtfile_lr_path) and not os.path.isfile(self.__txtfile_rl_path):
-            from_file_without_valid_filepath = 51
-            return from_file_without_valid_filepath
-        # ERROR CHECKING FINISHED
-            
-        # ARGUMENT BUILDING START
-        arglist = ["rsync", "-a", "--itemize-changes"]
-        if delete:
-            arglist.append("--delete")
-        if dryrun:
-            arglist.append("--dry-run")
-
-        if self.__txtfile_lr_path:
-            if not os.path.isfile(self.__txtfile_lr_path):
-                from_file_without_valid_filepath = 51
-                return from_file_without_valid_filepath
-            arglist_lr = arglist[:]
-            fromfile_lr_arg = "--files-from=" + self.__txtfile_lr_path
-            arglist_lr.append(fromfile_lr_arg)
-            arglist_lr.append(self.src_root)
-            arglist_lr.append(self.tar_root)
-
-        if self.__txtfile_rl_path:
-            if not os.path.isfile(self.__txtfile_rl_path):
-                from_file_without_valid_filepath = 51
-                return from_file_without_valid_filepath
-            arglist_rl = arglist[:]
-            fromfile_rl_arg = "--files-from=" + self.__txtfile_rl_path
-            arglist_rl.append(fromfile_rl_arg)
-            arglist_rl.append(self.tar_root)
-            arglist_rl.append(self.src_root)
-
-        return_lr = self.__run_rsync(arglist_lr, print_output)
-        return_rl = self.__run_rsync(arglist_rl, print_output)
-        if print_output and return_lr == 50 and return_rl == 50:
-            print("\nFOLDERS ARE ALREADY COMPLETELY SYNCED!")
-        self.__delete_textfiles()
-        return return_lr, return_rl
-    
-
-class Deleter:
-    
-    def __init__(self, root_dir) -> None:
-        self.files = set()
-        self.dirs = set()
-        self.files_in_deleted_dirs = set()
-        self.root_dir = root_dir
-        
-    def get_all_files(self):
-        return self.files.union(self.files_in_deleted_dirs)
-
-    def is_empty(self):
-        return not self.files and not self.dirs and not self.files_in_deleted_dirs
-    
-    def delete_items(self):
-        for item in self.files:
-            path = os.path.join(self.root_dir, item)
-            print(f"DELETING FILE: {path}")
-            os.unlink(path)
-        
-        for item in self.dirs:
-            path = os.path.join(self.root_dir, item)
-            print(f"DELETING DIRECTORY: {path}")
-            rmtree(path)
-            
-    def dryrun_delete_items(self):
-        [print(f"DELETING FILE (dry run): {item}") for item in self.files]
-        [print(f"DELETING DIRECTORY (dry run): {item}") for item in self.dirs]
+        return return_values
